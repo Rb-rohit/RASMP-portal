@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react';
 import { 
-  initialRequirements, 
-  initialSuppliers, 
-  initialQuotations, 
-  initialNotifications, 
   businessRules as initialBusinessRules 
 } from './data/initialData';
 import CustomerPanel from './components/CustomerPanel';
@@ -12,12 +8,8 @@ import AdminPanel from './components/AdminPanel';
 import AuthScreen from './components/AuthScreen';
 import { api, clearSession, setSession } from './api';
 import { 
-  User, 
-  Shield, 
-  Building2, 
-  Layers, 
+  Shield,  
   LogOut, 
-  Lock, 
   CheckCircle
 } from 'lucide-react';
 
@@ -35,6 +27,14 @@ export default function App() {
   const [quotations, setQuotations] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [businessRules, setBusinessRules] = useState(initialBusinessRules);
+
+  const applyServerData = (data) => {
+    setRequirements(data?.requirements);
+    setSuppliers(data?.suppliers);
+    setQuotations(data?.quotations);
+    setNotifications(data?.notifications);
+    setBusinessRules(data?.businessRules || initialBusinessRules);
+  };
 
   // Load from local storage or set initial data
   useEffect(() => {
@@ -68,10 +68,10 @@ export default function App() {
       } catch (error) {
         console.error(error);
         clearSession();
-        setRequirements(initialRequirements);
-        setSuppliers(initialSuppliers);
-        setQuotations(initialQuotations);
-        setNotifications(initialNotifications);
+        // setRequirements(initialRequirements);
+        // setSuppliers(initialSuppliers);
+        // setQuotations(initialQuotations);
+        // setNotifications(initialNotifications);
         setBusinessRules(initialBusinessRules);
         window.location.hash = '#login';
         setCurrentRoute('#login');
@@ -88,14 +88,6 @@ export default function App() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
-
-  const applyServerData = (data) => {
-    setRequirements(data?.requirements || initialRequirements);
-    setSuppliers(data?.suppliers || initialSuppliers);
-    setQuotations(data?.quotations || initialQuotations);
-    setNotifications(data?.notifications || initialNotifications);
-    setBusinessRules(data?.businessRules || initialBusinessRules);
-  };
 
   // Auth Handlers
   const handleLoginSuccess = (session) => {
@@ -137,7 +129,22 @@ export default function App() {
     }
   };
 
-  const handleSubmitBid = async (requirementId, requirementTitle, price, deliveryTime, specs, attachments = []) => {
+  const handleUpdateRequirement = async (id, updates) => {
+    try {
+      const response = await api.updateRequirement(id, updates);
+      applyServerData(response.currentData);
+      return { ok: true };
+    } catch (error) {
+      alert(error.message);
+      return { ok: false, message: error.message };
+    }
+  };
+
+  const handleRequirementStatusChange = async (id, status) => {
+    return handleUpdateRequirement(id, { status });
+  };
+
+  const handleSubmitBid = async (requirementId, requirementTitle, price, deliveryTime, specs, attachments = [], supplierDeclarationAccepted = false) => {
     try {
       const response = await api.submitBid({
         requirementId,
@@ -145,7 +152,8 @@ export default function App() {
         price,
         deliveryTime,
         specifications: specs,
-        attachments
+        attachments,
+        supplierDeclarationAccepted
       });
       applyServerData(response.currentData);
     } catch (error) {
@@ -160,6 +168,17 @@ export default function App() {
       alert('Contract successfully awarded! Bid has transitioned status to "Awarded", and Requirement is officially Closed.');
     } catch (error) {
       alert(error.message);
+    }
+  };
+
+  const handleSendQuotationMessage = async (quoteId, text) => {
+    try {
+      const response = await api.sendQuotationMessage(quoteId, text);
+      applyServerData(response.currentData);
+      return { ok: true };
+    } catch (error) {
+      alert(error.message);
+      return { ok: false, message: error.message };
     }
   };
 
@@ -359,8 +378,11 @@ export default function App() {
             onAddRequirement={handleAddRequirement}
             onSelectQuotation={handleSelectQuotation}
             onShortlistQuotation={handleShortlistQuotation}
+            onSendQuotationMessage={handleSendQuotationMessage}
             onClearNotifications={handleClearNotifications}
             onDeleteRequirement={handleDeleteRequirement}
+            onUpdateRequirement={handleUpdateRequirement}
+            onRequirementStatusChange={handleRequirementStatusChange}
             onUpdateCustomerProfile={handleUpdateCustomerProfile}
             onChangeCustomerPassword={handleChangeCustomerPassword}
           />
@@ -374,6 +396,7 @@ export default function App() {
             quotations={quotations}
             notifications={notifications}
             onSubmitBid={handleSubmitBid}
+            onSendQuotationMessage={handleSendQuotationMessage}
             onClearNotifications={handleClearNotifications}
             onUpdateProfile={handleUpdateProfile}
           />

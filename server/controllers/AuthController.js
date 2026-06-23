@@ -21,7 +21,7 @@ const login = async (req, res, next) => {
     res.json({
       user: publicUser(user),
       token: signToken(user),
-      ...(await buildBootstrap())
+      ...(await buildBootstrap(user))
     });
   } catch (error) {
     next(error);
@@ -115,7 +115,7 @@ const register = async (req, res, next) => {
     res.status(201).json({
       user: publicUser(user),
       token: signToken(user),
-      ...(await buildBootstrap())
+      ...(await buildBootstrap(user))
     });
   } catch (error) {
     next(error);
@@ -126,7 +126,7 @@ const session = async (req, res, next) => {
   try {
     res.json({
       user: publicUser(req.user),
-      ...(await buildBootstrap())
+      ...(await buildBootstrap(req.user))
     });
   } catch (error) {
     next(error);

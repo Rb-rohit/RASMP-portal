@@ -24,7 +24,7 @@ const createRequirement = async (req, res, next) => {
       quotationsCount: 0,
       matchPercentage: matchedSuppliers[0]?.match.score || 0,
       matchedSupplierIds: matchedSuppliers.map(item => item.supplier.id),
-      status: matchedSuppliers.length > 0 ? 'Matched' : (newReq.status || 'Open'),
+      status: newReq.status || 'Open',
       customerId: req.user.id
     });
 
@@ -47,7 +47,64 @@ const createRequirement = async (req, res, next) => {
       role: 'admin'
     });
 
-    res.status(201).json(await buildBootstrap());
+    res.status(201).json(await buildBootstrap(req.user));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateRequirement = async (req, res, next) => {
+  try {
+    const requirement = await Requirement.findOne({ id: req.params.id });
+
+    if (!requirement) {
+      return res.status(404).json({ message: 'Requirement not found.' });
+    }
+
+    if (req.user.role === 'customer' && requirement.customerId !== req.user.id) {
+      return res.status(403).json({ message: 'You can only update your own requirements.' });
+    }
+
+    const allowedFields = [
+      'title',
+      'category',
+      'industry',
+      'preferredSupplierType',
+      'subcategory',
+      'quantity',
+      'budgetRange',
+      'requiredBy',
+      'priority',
+      'location',
+      'specifications',
+      'status'
+    ];
+    const allowedStatuses = ['Open', 'Under review', 'Supplier selected', 'Cancelled', 'Closed'];
+
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        requirement[field] = req.body[field];
+      }
+    });
+
+    if (req.body.status && !allowedStatuses.includes(req.body.status)) {
+      return res.status(400).json({ message: 'Invalid requirement status.' });
+    }
+
+    if (!requirement.title || !requirement.subcategory || !requirement.quantity) {
+      return res.status(400).json({ message: 'Title, subcategory, and quantity are required.' });
+    }
+
+    await requirement.save();
+
+    await addNotification({
+      title: 'Requirement updated',
+      description: `"${requirement.title}" is now marked ${requirement.status}.`,
+      type: requirement.status === 'Cancelled' ? 'warning' : 'info',
+      role: 'customer'
+    });
+
+    res.json(await buildBootstrap(req.user));
   } catch (error) {
     next(error);
   }
@@ -55,12 +112,22 @@ const createRequirement = async (req, res, next) => {
 
 const deleteRequirement = async (req, res, next) => {
   try {
+    const requirement = await Requirement.findOne({ id: req.params.id });
+
+    if (!requirement) {
+      return res.status(404).json({ message: 'Requirement not found.' });
+    }
+
+    if (req.user.role === 'customer' && requirement.customerId !== req.user.id) {
+      return res.status(403).json({ message: 'You can only delete your own requirements.' });
+    }
+
     await Promise.all([
       Requirement.deleteOne({ id: req.params.id }),
       Quotation.deleteMany({ requirementId: req.params.id })
     ]);
 
-    res.json(await buildBootstrap());
+    res.json(await buildBootstrap(req.user));
   } catch (error) {
     next(error);
   }
@@ -68,5 +135,6 @@ const deleteRequirement = async (req, res, next) => {
 
 module.exports = {
   createRequirement,
+  updateRequirement,
   deleteRequirement
 };

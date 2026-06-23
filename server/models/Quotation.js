@@ -32,6 +32,10 @@ const quotationSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    supplierDeclarationAccepted: {
+      type: Boolean,
+      default: false
+    },
     attachments: [
       {
         attachmentType: {
@@ -45,6 +49,26 @@ const quotationSchema = new mongoose.Schema(
         size: Number,
         dataUrl: String,
         uploadedAt: String
+      }
+    ],
+    messages: [
+      {
+        senderRole: {
+          type: String,
+          enum: ['customer', 'supplier', 'admin'],
+          required: true
+        },
+        senderId: {
+          type: String,
+          required: true
+        },
+        senderName: String,
+        text: {
+          type: String,
+          required: true,
+          trim: true
+        },
+        sentAt: String
       }
     ],
     status: { 

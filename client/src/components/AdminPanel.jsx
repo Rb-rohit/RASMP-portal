@@ -605,7 +605,7 @@ export default function AdminPanel({
             )}
 
             {/* TAB 7: TECH & PERFORMANCE (SCHEMA & TELEMETRY DB) */}
-           
+
             {/* TAB 8: ALERTS & INTELLIGENT MATCHING ADVISORY */}
             {activeTab === 'alerts' && (
               <motion.div 

@@ -6,12 +6,53 @@ const BusinessRule = require('../models/BusinessRule');
 
 const sortByNewestMongoDoc = { createdAt: -1 };
 
-const buildBootstrap = async () => {
+const publicRequirementStatuses = ['Open', 'Under review'];
+
+const buildBootstrap = async (user = null) => {
+  const role = user?.role;
+
+  if (!role) {
+    const businessRules = await BusinessRule.find().sort({ id: 1 }).lean();
+    return {
+      currentData: {
+        requirements: [],
+        suppliers: [],
+        quotations: [],
+        notifications: [],
+        businessRules
+      }
+    };
+  }
+
+  const supplierProfile = role === 'supplier'
+    ? await Supplier.findOne({ userId: user.id }).lean()
+    : null;
+
+  const requirementFilter = role === 'customer'
+    ? { customerId: user.id }
+    : role === 'supplier'
+      ? { status: { $in: publicRequirementStatuses } }
+      : {};
+
+  const quotationFilter = role === 'customer'
+    ? { requirementId: { $in: (await Requirement.find({ customerId: user.id }).distinct('id')) } }
+    : role === 'supplier'
+      ? { supplierId: supplierProfile?.id || '__none__' }
+      : {};
+
+  const supplierFilter = role === 'supplier'
+    ? { id: supplierProfile?.id || '__none__' }
+    : {};
+
+  const notificationFilter = role
+    ? { role }
+    : {};
+
   const [requirements, suppliers, quotations, notifications, businessRules] = await Promise.all([
-    Requirement.find().sort(sortByNewestMongoDoc).lean(),
-    Supplier.find().sort({ id: 1 }).lean(),
-    Quotation.find().sort(sortByNewestMongoDoc).lean(),
-    Notification.find().sort(sortByNewestMongoDoc).lean(),
+    Requirement.find(requirementFilter).sort(sortByNewestMongoDoc).lean(),
+    Supplier.find(supplierFilter).sort({ id: 1 }).lean(),
+    Quotation.find(quotationFilter).sort(sortByNewestMongoDoc).lean(),
+    Notification.find(notificationFilter).sort(sortByNewestMongoDoc).lean(),
     BusinessRule.find().sort({ id: 1 }).lean()
   ]);
 

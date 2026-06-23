@@ -19,6 +19,10 @@ import {
   Send,
   Trash2,
   Check,
+  Edit3,
+  Eye,
+  Activity,
+  XCircle,
   Mail,
   Phone,
   KeyRound,
@@ -36,8 +40,11 @@ export default function CustomerPanel({
   onAddRequirement,
   onSelectQuotation,
   onShortlistQuotation,
+  onSendQuotationMessage,
   onClearNotifications,
   onDeleteRequirement,
+  onUpdateRequirement,
+  onRequirementStatusChange,
   onUpdateCustomerProfile,
   onChangeCustomerPassword
 }) {
@@ -62,6 +69,10 @@ export default function CustomerPanel({
   const [profileError, setProfileError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [selectedRequirement, setSelectedRequirement] = useState(null);
+  const [requirementModalMode, setRequirementModalMode] = useState('view');
+  const [editRequirement, setEditRequirement] = useState(null);
+  const [messageDrafts, setMessageDrafts] = useState({});
 
   const [profileName, setProfileName] = useState(currentUser?.name || '');
   const [buyerType, setBuyerType] = useState(currentUser?.buyerType || 'Individual Buyer');
@@ -152,7 +163,23 @@ export default function CustomerPanel({
     setSpecifications('Required high speed AWS/Azure equivalent object storage with direct integration APIs, SLA guaranteed.');
   };
 
-  const activeReqsCount = requirements.filter(r => r.status !== 'Closed').length;
+  const getRequirementStatus = (req) => {
+    if (req.status === 'In review') return 'Under review';
+    if (req.status === 'Matched') return 'Open';
+    return req.status || 'Open';
+  };
+  const getStatusTheme = (status) => {
+    switch (status) {
+      case 'Open': return 'bg-blue-100 text-blue-700';
+      case 'Under review': return 'bg-amber-100 text-amber-800';
+      case 'Supplier selected': return 'bg-emerald-100 text-emerald-800';
+      case 'Cancelled': return 'bg-red-100 text-red-700';
+      case 'Closed': return 'bg-slate-100 text-slate-500';
+      default: return 'bg-slate-100 text-slate-500';
+    }
+  };
+
+  const activeReqsCount = requirements.filter(r => !['Closed', 'Cancelled'].includes(getRequirementStatus(r))).length;
   const closedReqsCount = requirements.filter(r => r.status === 'Closed').length;
   const pendingQuotesCount = quotations.filter(q => q.status === 'New' || q.status === 'Reviewing' || q.status === 'Shortlisted').length;
 
@@ -173,7 +200,7 @@ export default function CustomerPanel({
     if (supplier.verified === 'Approved' || supplier.verified === 'Verified') score += 10;
     return Math.min(score, 100);
   };
-  const latestOpenRequirement = requirements.find(req => req.status !== 'Supplier selected' && req.status !== 'Closed') || requirements[0];
+  const latestOpenRequirement = requirements.find(req => !['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req))) || requirements[0];
   const matchedSuppliers = suppliers
     .filter(sup => sup.verified === 'Approved' || sup.verified === 'Verified')
     .map(sup => ({
@@ -185,7 +212,7 @@ export default function CustomerPanel({
 
   const filteredRequirements = requirements.filter(r => {
     if (filterStatus === 'All') return true;
-    return r.status === filterStatus;
+    return getRequirementStatus(r) === filterStatus;
   });
 
   const handleProfileSave = async (e) => {
@@ -236,6 +263,62 @@ export default function CustomerPanel({
       setTimeout(() => setPasswordSuccess(''), 2500);
     } else {
       setPasswordError(result?.message || 'Password could not be changed.');
+    }
+  };
+
+  const openRequirementModal = (req, mode) => {
+    setSelectedRequirement(req);
+    setRequirementModalMode(mode);
+    setEditRequirement({
+      title: req.title || '',
+      category: req.category || 'IT / Technology',
+      industry: req.industry || req.category || '',
+      preferredSupplierType: req.preferredSupplierType || '',
+      subcategory: req.subcategory || '',
+      quantity: req.quantity || '',
+      budgetRange: req.budgetRange || '',
+      requiredBy: req.requiredBy || '',
+      priority: req.priority || 'Normal',
+      location: req.location || '',
+      specifications: req.specifications || '',
+      status: getRequirementStatus(req)
+    });
+  };
+
+  const closeRequirementModal = () => {
+    setSelectedRequirement(null);
+    setEditRequirement(null);
+    setRequirementModalMode('view');
+  };
+
+  const handleRequirementUpdate = async (e) => {
+    e.preventDefault();
+    if (!selectedRequirement || !editRequirement) return;
+    if (!editRequirement.title || !editRequirement.subcategory || !editRequirement.quantity) {
+      alert('Please fill out the title, subcategory and quantity constraints.');
+      return;
+    }
+
+    const result = await onUpdateRequirement(selectedRequirement.id, editRequirement);
+    if (result?.ok) {
+      closeRequirementModal();
+    }
+  };
+
+  const handleStatusAction = async (req, status) => {
+    const result = await onRequirementStatusChange(req.id, status);
+    if (result?.ok && selectedRequirement?.id === req.id) {
+      closeRequirementModal();
+    }
+  };
+
+  const handleQuotationMessage = async (quoteId) => {
+    const text = String(messageDrafts[quoteId] || '').trim();
+    if (!text) return;
+
+    const result = await onSendQuotationMessage(quoteId, text);
+    if (result?.ok) {
+      setMessageDrafts({ ...messageDrafts, [quoteId]: '' });
     }
   };
 
@@ -450,13 +533,8 @@ export default function CustomerPanel({
                               <span className="text-[10px] text-slate-500 block">{req.category} · Due {req.requiredBy}</span>
                             </div>
                           </div>
-                          <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full uppercase shrink-0 ${
-                            req.status === 'Open' ? 'bg-blue-100 text-blue-700' :
-                            req.status === 'Matched' ? 'bg-green-100 text-green-700' :
-                            req.status === 'In review' ? 'bg-amber-100 text-amber-700' :
-                            'bg-slate-100 text-slate-500'
-                          }`}>
-                            {req.status}
+                          <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full uppercase shrink-0 ${getStatusTheme(getRequirementStatus(req))}`}>
+                            {getRequirementStatus(req)}
                           </span>
                         </div>
                       ))}
@@ -555,7 +633,7 @@ export default function CustomerPanel({
               >
                 {/* FILTER CHIPS */}
                 <div className="flex gap-2 pb-2 overflow-x-auto border-0">
-                  {['All', 'Open', 'Matched', 'In review', 'Closed'].map(tab => (
+                  {['All', 'Open', 'Under review', 'Supplier selected', 'Cancelled', 'Closed'].map(tab => (
                     <button
                       key={tab}
                       onClick={() => setFilterStatus(tab)}
@@ -612,17 +690,61 @@ export default function CustomerPanel({
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded-full uppercase ${
-                              req.status === 'Open' ? 'bg-blue-100 text-blue-700' :
-                              req.status === 'Matched' ? 'bg-emerald-100 text-emerald-800' :
-                              req.status === 'In review' ? 'bg-amber-100 text-amber-800' :
-                              'bg-slate-100 text-slate-400'
-                            }`}>
-                              {req.status}
+                            <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded-full uppercase ${getStatusTheme(getRequirementStatus(req))}`}>
+                              {getRequirementStatus(req)}
                             </span>
                             
                             <button 
-                              onClick={() => onDeleteRequirement(req._id)}
+                              onClick={() => openRequirementModal(req, 'view')}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors"
+                              title="View requirement"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button 
+                              onClick={() => openRequirementModal(req, 'edit')}
+                              disabled={['Closed', 'Cancelled'].includes(getRequirementStatus(req))}
+                              className={`p-1.5 rounded-lg border transition-colors ${
+                                ['Closed', 'Cancelled'].includes(getRequirementStatus(req))
+                                  ? 'border-slate-200 text-slate-300 cursor-not-allowed'
+                                  : 'border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/50'
+                              }`}
+                              title="Edit requirement"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button 
+                              onClick={() => openRequirementModal(req, 'track')}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50/50 transition-colors"
+                              title="Track requirement"
+                            >
+                              <Activity className="w-3.5 h-3.5" />
+                            </button>
+
+                            {!['Closed', 'Cancelled'].includes(getRequirementStatus(req)) && (
+                              <button 
+                                onClick={() => handleStatusAction(req, 'Cancelled')}
+                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50/50 transition-colors"
+                                title="Cancel requirement"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {getRequirementStatus(req) === 'Supplier selected' && (
+                              <button 
+                                onClick={() => handleStatusAction(req, 'Closed')}
+                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50/50 transition-colors"
+                                title="Close requirement after completion"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            <button 
+                              onClick={() => onDeleteRequirement(req.id)}
                               className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50/50 transition-colors"
                               title="Delete requirement"
                             >
@@ -929,7 +1051,7 @@ export default function CustomerPanel({
                 transition={{ duration: 0.15 }}
                 className="space-y-6"
               >
-                {requirements.filter(req => req.status !== 'Closed').map(req => {
+                {requirements.filter(req => !['Closed', 'Cancelled'].includes(getRequirementStatus(req))).map(req => {
                   const reqQuotes = quotations.filter(q => q.requirementId === req.id);
                   return (
                     <div key={req.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
@@ -1001,6 +1123,37 @@ export default function CustomerPanel({
                                         {file.label || file.attachmentType}
                                       </a>
                                     ))}
+                                  </div>
+                                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                    <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                                      {(quote.messages || []).length === 0 ? (
+                                        <p className="text-[10px] text-slate-400 font-semibold">No messages yet.</p>
+                                      ) : (
+                                        quote.messages.map((message, index) => (
+                                          <div key={`${quote.id}-message-${index}`} className={`text-[10px] ${message.senderRole === 'customer' ? 'text-blue-700' : 'text-emerald-700'}`}>
+                                            <span className="font-black uppercase">{message.senderRole}:</span>
+                                            <span className="font-semibold text-slate-700"> {message.text}</span>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        value={messageDrafts[quote.id] || ''}
+                                        onChange={e => setMessageDrafts({ ...messageDrafts, [quote.id]: e.target.value })}
+                                        placeholder="Message supplier"
+                                        className="min-w-0 flex-1 text-[11px] rounded-lg border border-slate-200 px-2 py-1.5 focus:outline-none focus:border-blue-600"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuotationMessage(quote.id)}
+                                        className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold border-0 cursor-pointer"
+                                      >
+                                        <Send className="w-3 h-3" />
+                                        <span>Send</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -1343,6 +1496,161 @@ export default function CustomerPanel({
           </AnimatePresence>
         </div>
       </main>
+
+      {selectedRequirement && (
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-5 space-y-4"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
+                  {requirementModalMode === 'edit' ? 'Edit Requirement' : requirementModalMode === 'track' ? 'Track Requirement' : 'View Requirement'}
+                </span>
+                <h3 className="font-bold text-slate-900 text-sm mt-1">{selectedRequirement.title}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeRequirementModal}
+                className="text-slate-400 hover:text-slate-700 font-bold p-1 border-0 bg-transparent cursor-pointer"
+              >
+                X
+              </button>
+            </div>
+
+            {requirementModalMode === 'edit' && editRequirement ? (
+              <form onSubmit={handleRequirementUpdate} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Title</label>
+                    <input value={editRequirement.title} onChange={e => setEditRequirement({ ...editRequirement, title: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600" required />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Category</label>
+                    <select value={editRequirement.category} onChange={e => setEditRequirement({ ...editRequirement, category: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 bg-white focus:outline-none focus:border-blue-600">
+                      <option>IT / Technology</option>
+                      <option>Industrial & manufacturing</option>
+                      <option>Logistics</option>
+                      <option>Agriculture</option>
+                      <option>Real estate & construction</option>
+                      <option>Professional services</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Subcategory</label>
+                    <input value={editRequirement.subcategory} onChange={e => setEditRequirement({ ...editRequirement, subcategory: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600" required />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Quantity</label>
+                    <input value={editRequirement.quantity} onChange={e => setEditRequirement({ ...editRequirement, quantity: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600" required />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Budget</label>
+                    <input value={editRequirement.budgetRange} onChange={e => setEditRequirement({ ...editRequirement, budgetRange: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Required By</label>
+                    <input type="date" value={editRequirement.requiredBy} onChange={e => setEditRequirement({ ...editRequirement, requiredBy: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Location</label>
+                    <input value={editRequirement.location} onChange={e => setEditRequirement({ ...editRequirement, location: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Priority</label>
+                    <select value={editRequirement.priority} onChange={e => setEditRequirement({ ...editRequirement, priority: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 bg-white focus:outline-none focus:border-blue-600">
+                      <option>Normal</option>
+                      <option>High</option>
+                      <option>Critical</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status</label>
+                    <select value={editRequirement.status} onChange={e => setEditRequirement({ ...editRequirement, status: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 bg-white focus:outline-none focus:border-blue-600">
+                      <option>Open</option>
+                      <option>Under review</option>
+                      <option>Supplier selected</option>
+                      <option>Cancelled</option>
+                      <option>Closed</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Specifications</label>
+                    <textarea value={editRequirement.specifications} onChange={e => setEditRequirement({ ...editRequirement, specifications: e.target.value })} rows={3} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600 resize-none" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button type="button" onClick={closeRequirementModal} className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-lg text-xs font-bold border-0 cursor-pointer">Cancel</button>
+                  <button type="submit" className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-lg text-xs font-bold border-0 cursor-pointer">Save Requirement</button>
+                </div>
+              </form>
+            ) : requirementModalMode === 'track' ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Status</span>
+                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${getStatusTheme(getRequirementStatus(selectedRequirement))}`}>{getRequirementStatus(selectedRequirement)}</span>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Quotes</span>
+                    <span className="font-bold text-slate-900">{quotations.filter(q => q.requirementId === selectedRequirement.id).length}</span>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Matched Suppliers</span>
+                    <span className="font-bold text-slate-900">{selectedRequirement.matchedSupplierIds?.length || 0}</span>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Selected</span>
+                    <span className="font-bold text-slate-900">{selectedRequirement.selectedSupplierName || 'Pending'}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {['Open', 'Under review', 'Supplier selected', 'Closed'].map(step => {
+                    const currentStatus = getRequirementStatus(selectedRequirement);
+                    const order = ['Open', 'Under review', 'Supplier selected', 'Closed'];
+                    const done = order.indexOf(currentStatus) >= order.indexOf(step);
+                    return (
+                      <div key={step} className="flex items-center gap-3 text-xs">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center border ${done ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200'}`}>
+                          <Check className="w-3 h-3" />
+                        </span>
+                        <span className={done ? 'font-bold text-slate-800' : 'font-semibold text-slate-400'}>{step}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {getRequirementStatus(selectedRequirement) === 'Supplier selected' && (
+                  <div className="flex justify-end border-t border-slate-100 pt-4">
+                    <button type="button" onClick={() => handleStatusAction(selectedRequirement, 'Closed')} className="bg-emerald-600 text-white hover:bg-emerald-700 px-4 py-2 rounded-lg text-xs font-bold border-0 cursor-pointer">
+                      Close After Completion
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                {[
+                  ['Status', getRequirementStatus(selectedRequirement)],
+                  ['Category', `${selectedRequirement.category} / ${selectedRequirement.subcategory}`],
+                  ['Quantity', selectedRequirement.quantity],
+                  ['Budget', selectedRequirement.budgetRange],
+                  ['Required By', selectedRequirement.requiredBy],
+                  ['Location', selectedRequirement.location],
+                  ['Priority', selectedRequirement.priority],
+                  ['Specifications', selectedRequirement.specifications]
+                ].map(([label, value]) => (
+                  <div key={label} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 border-b border-slate-100 pb-2">
+                    <span className="w-28 shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+                    <span className="font-semibold text-slate-700">{value || 'Not specified'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
 
     </div>
   );

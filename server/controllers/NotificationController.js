@@ -10,7 +10,7 @@ const clearByRole = async (req, res, next) => {
     }
 
     await Notification.deleteMany({ role });
-    res.json(await buildBootstrap());
+    res.json(await buildBootstrap(req.user));
   } catch (error) {
     next(error);
   }

@@ -32,7 +32,7 @@ const updateProfile = async (req, res, next) => {
 
     res.json({
       user: publicUser(updatedUser),
-      ...(await buildBootstrap())
+      ...(await buildBootstrap(updatedUser))
     });
   } catch (error) {
     next(error);
@@ -60,7 +60,7 @@ const changePassword = async (req, res, next) => {
 
     res.json({
       user: publicUser(updatedUser),
-      ...(await buildBootstrap())
+      ...(await buildBootstrap(updatedUser))
     });
   } catch (error) {
     next(error);

@@ -54,7 +54,7 @@ const requirements = [
     priority: 'High',
     location: 'Pan-India',
     specifications: 'Secure object storage, S3-compliant API, 99.99% durability SLA, high performance, ISO 9001 certified provider.',
-    status: 'Matched',
+    status: 'Open',
     createdAt: '2026-06-10',
     matchPercentage: 95,
     quotationsCount: 2,
@@ -88,7 +88,7 @@ const requirements = [
     priority: 'Critical',
     location: 'Mumbai, MH',
     specifications: 'Daily last-mile shipping, temperature-controlled fleet required for some pharma parcels, real-time tracking dashboard.',
-    status: 'In review',
+    status: 'Under review',
     createdAt: '2026-06-15',
     matchPercentage: 85,
     quotationsCount: 1,
@@ -328,21 +328,39 @@ const notifications = [
 const businessRules = [
   {
     id: 'rule-1',
-    title: 'Direct Ownership Enforced',
-    description: 'Only the original requirement poster can modify, archive, or award a contract.',
+    title: 'BR1',
+    description: 'Suppliers must posses direct ownership, stock, manufacturing authority, distribution rights, brokerage authority, or service capability,',
     icon: 'UserCheck'
   },
   {
     id: 'rule-2',
-    title: 'No Lead Forwarding',
-    description: 'Supplier contacts are kept secure. Communication, bids, and chat occurs entirely within the platform.',
+    title: 'BR2',
+    description: 'Supplier-to-Supplier lead forwarding is prohibited.',
     icon: 'ShieldAlert'
   },
   {
     id: 'rule-3',
-    title: 'Three-Step Onboarding',
-    description: 'All commercial accounts undergo MFA verification, official certificate validation, and admin approval.',
+    title: 'BR3',
+    description: 'Fake supplier shall be permenently suspendeded.',
     icon: 'ShieldCheck'
+  },
+  {
+    id: 'rule-4',
+    title: 'BR4',
+    description: 'Customer can select only one supplir for each requirement.',
+    icon: 'Lock'
+  },
+  {
+    id: 'rule-5',
+    title: 'BR5',
+    description: 'Customer may recieve multiple supplier responses.',
+    icon: 'Activity'
+  },
+  {
+    id: 'rule-6',
+    title: 'BR6',
+    description: 'Only verified suppliers may access requirements.',
+    icon: 'Activity'
   }
 ];
 

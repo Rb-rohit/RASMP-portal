@@ -38,8 +38,8 @@ export async function apiRequest(path, options = {}) {
 
     throw new Error(data.message || 'RASMP API request failed.');
   }
-  console.log("API URL:", API_BASE_URL);
-  console.log("API Response:", data);
+  // console.log("API URL:", API_BASE_URL);
+  // console.log("API Response:", data);
   return data;
 }
 
@@ -50,8 +50,10 @@ export const api = {
   checkEmail: (email) => apiRequest('/auth/check-email', { method: 'POST', body: { email } }),
   register: (user) => apiRequest('/auth/register', { method: 'POST', body: { user } }),
   addRequirement: (requirement) => apiRequest('/requirements', { method: 'POST', body: requirement }),
+  updateRequirement: (id, requirement) => apiRequest(`/requirements/${id}`, { method: 'PATCH', body: requirement }),
   deleteRequirement: (id) => apiRequest(`/requirements/${id}`, { method: 'DELETE' }),
   submitBid: (payload) => apiRequest('/quotations', { method: 'POST', body: payload }),
+  sendQuotationMessage: (id, text) => apiRequest(`/quotations/${id}/messages`, { method: 'POST', body: { text } }),
   shortlistQuotation: (id) => apiRequest(`/quotations/${id}/shortlist`, { method: 'POST' }),
   selectQuotation: (id) => apiRequest(`/quotations/${id}/select`, { method: 'POST' }),
   updateSupplierVerification: (id, status) => apiRequest(`/suppliers/${id}/verification`, { method: 'PATCH', body: { status } }),

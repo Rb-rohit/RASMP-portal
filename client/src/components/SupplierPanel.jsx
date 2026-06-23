@@ -24,6 +24,7 @@ export default function SupplierPanel({
   quotations,
   notifications,
   onSubmitBid,
+  onSendQuotationMessage,
   onClearNotifications,
   onUpdateProfile
 }) {
@@ -39,6 +40,8 @@ export default function SupplierPanel({
   const [brochureFile, setBrochureFile] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [quotationPdfFile, setQuotationPdfFile] = useState(null);
+  const [supplierDeclarationAccepted, setSupplierDeclarationAccepted] = useState(false);
+  const [messageDrafts, setMessageDrafts] = useState({});
 
   const activeSupplier = (
     currentUser?.role === 'supplier'
@@ -76,7 +79,7 @@ export default function SupplierPanel({
   };
 
   const matchedLeads = requirements
-    .filter(req => req.status !== 'Closed' && req.status !== 'Supplier selected')
+    .filter(req => !['Closed', 'Supplier selected', 'Cancelled'].includes(req.status))
     .map(req => ({ ...req, supplierMatchScore: getMatchScore(req, activeSupplier) }))
     .filter(req => req.supplierMatchScore >= 45 || req.matchedSupplierIds?.includes(activeSupplier?.id))
     .sort((a, b) => b.supplierMatchScore - a.supplierMatchScore);
@@ -146,10 +149,14 @@ export default function SupplierPanel({
       alert('Please attach the quotation PDF before submitting.');
       return;
     }
+    if (!supplierDeclarationAccepted) {
+      alert('Please accept the supplier declaration before responding.');
+      return;
+    }
 
-    let attachments = [];
+    let bidAttachments;
     try {
-      attachments = (await Promise.all([
+      bidAttachments = (await Promise.all([
         fileToAttachment(catalogFile, 'catalog', 'Catalog'),
         fileToAttachment(brochureFile, 'brochure', 'Brochure'),
         fileToAttachment(imageFile, 'image', 'Product image'),
@@ -166,7 +173,8 @@ export default function SupplierPanel({
       '₹' + bidPrice.replace(/[^0-9.]/g, ''),
       bidDelivery + ' days',
       bidSpecs || 'As per baseline specifications requested.',
-      attachments
+      bidAttachments,
+      supplierDeclarationAccepted
     );
 
     // reset forms
@@ -178,8 +186,19 @@ export default function SupplierPanel({
     setBrochureFile(null);
     setImageFile(null);
     setQuotationPdfFile(null);
+    setSupplierDeclarationAccepted(false);
     alert('Bidding quotation securely sent to matching customer queue!');
     setActiveTab('quotes');
+  };
+
+  const handleQuotationMessage = async (quoteId) => {
+    const text = String(messageDrafts[quoteId] || '').trim();
+    if (!text) return;
+
+    const result = await onSendQuotationMessage(quoteId, text);
+    if (result?.ok) {
+      setMessageDrafts({ ...messageDrafts, [quoteId]: '' });
+    }
   };
 
   return (
@@ -500,12 +519,12 @@ export default function SupplierPanel({
 
                 {/* OPPORTUNITES LISTING */}
                 <div className="space-y-3">
-                  {filteredLeads.filter(l => l.status !== 'Closed').length === 0 ? (
+                  {filteredLeads.filter(l => !['Closed', 'Cancelled'].includes(l.status)).length === 0 ? (
                     <div className="bg-white p-12 text-center rounded-xl border border-slate-200">
                       <p className="text-slate-500 text-sm">No matched opportunities found.</p>
                     </div>
                   ) : (
-                    filteredLeads.filter(l => l.status !== 'Closed').map((lead, index) => (
+                    filteredLeads.filter(l => !['Closed', 'Cancelled'].includes(l.status)).map((lead, index) => (
                       <div key={getListKey('filtered-lead', lead, index)} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <div className="min-w-0 space-y-1">
                           <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">{lead.category}</span>
@@ -564,8 +583,8 @@ export default function SupplierPanel({
                       <p className="p-8 text-center text-xs text-slate-500">You haven't uploaded bids for public proposals yet.</p>
                     ) : (
                       myQuotations.map((quote, index) => (
-                        <div key={getListKey('quotation', quote, index)} className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                          <div className="space-y-1">
+                        <div key={getListKey('quotation', quote, index)} className="p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                          <div className="space-y-1 min-w-0 flex-1">
                             <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest block">Submitted Proposal</span>
                             <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{quote.requirementTitle}</h4>
                             <p className="text-[11px] text-indigo-505 text-indigo-600 font-semibold">
@@ -573,9 +592,40 @@ export default function SupplierPanel({
                             </p>
                             <p className="text-[10px] text-slate-500 font-medium mt-0.5">Guaranteed lead delivery: {quote.deliveryTime}</p>
                             <p className="text-[11px] text-slate-500 mt-1 italic">"{quote.specifications}"</p>
+                            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2 max-w-2xl">
+                              <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                                {(quote.messages || []).length === 0 ? (
+                                  <p className="text-[10px] text-slate-400 font-semibold">No messages yet.</p>
+                                ) : (
+                                  quote.messages.map((message, messageIndex) => (
+                                    <div key={`${quote.id}-message-${messageIndex}`} className={`text-[10px] ${message.senderRole === 'supplier' ? 'text-emerald-700' : 'text-blue-700'}`}>
+                                      <span className="font-black uppercase">{message.senderRole}:</span>
+                                      <span className="font-semibold text-slate-700"> {message.text}</span>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={messageDrafts[quote.id] || ''}
+                                  onChange={e => setMessageDrafts({ ...messageDrafts, [quote.id]: e.target.value })}
+                                  placeholder="Message customer"
+                                  className="min-w-0 flex-1 text-[11px] rounded-lg border border-slate-200 px-2 py-1.5 focus:outline-none focus:border-emerald-600"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuotationMessage(quote.id)}
+                                  className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold border-0 cursor-pointer"
+                                >
+                                  <Send className="w-3 h-3" />
+                                  <span>Send</span>
+                                </button>
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+                          <div className="flex items-center gap-3 self-end lg:self-center shrink-0">
                             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                               quote.status === 'Awarded' ? 'bg-emerald-100 text-emerald-800 animate-pulse' :
                               quote.status === 'Reviewing' ? 'bg-amber-100 text-amber-800' :
@@ -893,6 +943,19 @@ export default function SupplierPanel({
                 </div>
               </div>
 
+              <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={supplierDeclarationAccepted}
+                  onChange={e => setSupplierDeclarationAccepted(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-emerald-600"
+                  required
+                />
+                <span className="text-[11px] font-semibold leading-5 text-slate-700">
+                  I confirm that I directly own, manufacture, stock, distribute, represent or provide the product/service mentioned and am not acting as an intermediary between multiple suppliers.
+                </span>
+              </label>
+
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button 
                   type="button" 
@@ -903,9 +966,9 @@ export default function SupplierPanel({
                 </button>
                 <button 
                   type="submit" 
-                  disabled={!supplierApproved}
+                  disabled={!supplierApproved || !supplierDeclarationAccepted}
                   className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors border-0 ${
-                    supplierApproved
+                    supplierApproved && supplierDeclarationAccepted
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   }`}

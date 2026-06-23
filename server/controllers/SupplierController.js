@@ -28,7 +28,7 @@ const updateVerification = async (req, res, next) => {
       role: 'admin'
     });
 
-    res.json(await buildBootstrap());
+    res.json(await buildBootstrap(req.user));
   } catch (error) {
     next(error);
   }
@@ -41,9 +41,21 @@ const updateProfile = async (req, res, next) => {
       return res.status(403).json({ message: `Supplier functions are locked while verification status is ${ownedSupplier?.verified || 'Pending'}.` });
     }
 
-    const supplierId = req.body.id || ownedSupplier?.id || 'sup-2';
-    await Supplier.updateOne({ id: supplierId }, { ...req.body });
-    res.json(await buildBootstrap());
+    const supplierId = req.user.role === 'supplier'
+      ? ownedSupplier?.id
+      : req.body.id || ownedSupplier?.id || 'sup-2';
+
+    if (!supplierId) {
+      return res.status(404).json({ message: 'Supplier profile not found.' });
+    }
+
+    const { id, userId, verified, documents, ...profileUpdates } = req.body;
+    const updates = req.user.role === 'admin'
+      ? { ...req.body }
+      : profileUpdates;
+
+    await Supplier.updateOne({ id: supplierId }, updates);
+    res.json(await buildBootstrap(req.user));
   } catch (error) {
     next(error);
   }
