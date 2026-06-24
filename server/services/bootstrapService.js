@@ -3,6 +3,8 @@ const Supplier = require('../models/Supplier');
 const Quotation = require('../models/Quotation');
 const Notification = require('../models/Notification');
 const BusinessRule = require('../models/BusinessRule');
+const Category = require('../models/Category');
+const User = require('../models/User');
 
 const sortByNewestMongoDoc = { createdAt: -1 };
 
@@ -12,14 +14,19 @@ const buildBootstrap = async (user = null) => {
   const role = user?.role;
 
   if (!role) {
-    const businessRules = await BusinessRule.find().sort({ id: 1 }).lean();
+    const [businessRules, categories] = await Promise.all([
+      BusinessRule.find().sort({ id: 1 }).lean(),
+      Category.find({ status: 'Active' }).sort({ name: 1 }).lean()
+    ]);
     return {
       currentData: {
         requirements: [],
         suppliers: [],
         quotations: [],
         notifications: [],
-        businessRules
+        businessRules,
+        categories,
+        users: []
       }
     };
   }
@@ -48,12 +55,16 @@ const buildBootstrap = async (user = null) => {
     ? { role }
     : {};
 
-  const [requirements, suppliers, quotations, notifications, businessRules] = await Promise.all([
+  const [requirements, suppliers, quotations, notifications, businessRules, categories, users] = await Promise.all([
     Requirement.find(requirementFilter).sort(sortByNewestMongoDoc).lean(),
     Supplier.find(supplierFilter).sort({ id: 1 }).lean(),
     Quotation.find(quotationFilter).sort(sortByNewestMongoDoc).lean(),
     Notification.find(notificationFilter).sort(sortByNewestMongoDoc).lean(),
-    BusinessRule.find().sort({ id: 1 }).lean()
+    BusinessRule.find().sort({ id: 1 }).lean(),
+    Category.find(role === 'admin' ? {} : { status: 'Active' }).sort({ name: 1 }).lean(),
+    role === 'admin'
+      ? User.find().select('-passwordHash').sort({ role: 1, name: 1 }).lean()
+      : []
   ]);
 
   return {
@@ -62,7 +73,9 @@ const buildBootstrap = async (user = null) => {
       suppliers,
       quotations,
       notifications,
-      businessRules
+      businessRules,
+      categories,
+      users
     }
   };
 };

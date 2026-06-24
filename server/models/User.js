@@ -33,10 +33,21 @@ const userSchema = new mongoose.Schema(
             enum: ['customer', 'supplier', 'admin'],
             required: true
         },
+        adminClass: {
+            type: String,
+            enum: ['Platform Administration', 'Verification Team'],
+            default: undefined
+        },
         verified: {
             type: Boolean,
             default: false
         },
+        accountStatus: {
+            type: String,
+            enum: ['Active', 'Suspended'],
+            default: 'Active'
+        },
+        suspensionReason: String,
         joinedDate: {
             type: String
         },

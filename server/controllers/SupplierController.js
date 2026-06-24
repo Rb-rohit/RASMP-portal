@@ -1,9 +1,14 @@
 const Supplier = require('../models/Supplier');
+const User = require('../models/User');
 const buildBootstrap = require('../services/bootstrapService');
 const { addNotification } = require('../services/notificationService');
 
 const updateVerification = async (req, res, next) => {
   try {
+    if (!['Platform Administration', 'Verification Team'].includes(req.user.adminClass)) {
+      return res.status(403).json({ message: 'Only Verification Team or Platform Administration can verify suppliers.' });
+    }
+
     const status = req.body.status === 'Approved' ? 'Approved' : 'Rejected';
     const supplier = await Supplier.findOne({ id: req.params.id });
 
@@ -21,6 +26,12 @@ const updateVerification = async (req, res, next) => {
         }))
       }
     );
+    if (supplier.userId) {
+      await User.updateOne(
+        { id: supplier.userId },
+        { verified: status === 'Approved' }
+      );
+    }
     await addNotification({
       title: status === 'Approved' ? 'Supplier documents approved!' : 'Supplier documents rejected',
       description: `${supplier.name} status changed to ${status}.`,

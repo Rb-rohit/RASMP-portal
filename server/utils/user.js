@@ -5,7 +5,7 @@ const initialsFor = (name = '') => (
     .map(part => part[0])
     .join('')
     .toUpperCase()
-    .substring(0, 2) || 'US'
+    .substring(0, 2) || 'CS'
 );
 
 const publicUser = (user) => {

@@ -10,7 +10,13 @@ import {
   Sliders,
   Search,
   CheckCircle,
-  ShieldCheck
+  ShieldCheck,
+  Ban,
+  RefreshCcw,
+  Tags,
+  FileBarChart,
+  Plus,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -18,41 +24,123 @@ export default function AdminPanel({
   currentUser,
   requirements,
   suppliers,
+  users = [],
+  categories = [],
+  adminReport,
   notifications,
   businessRules,
   onApproveSupplier,
   onRejectSupplier,
+  onUpdateUserVerification,
+  onUpdateUserStatus,
+  onAddCategory,
+  onUpdateCategory,
+  onGenerateReport,
   onClearNotifications
 }) {
   const [activeTab, setActiveTab] = useState('dash');
+  const [adminClass, setAdminClass] = useState(currentUser?.adminClass || 'Platform Administration');
   const [userSearchText, setUserSearchText] = useState('');
   const [userFilter, setUserFilter] = useState('All');
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryDescription, setCategoryDescription] = useState('');
+  const [suspensionReason, setSuspensionReason] = useState('Fraud risk flagged by admin.');
 
   const adminNotifications = notifications.filter(n => n.role === 'admin');
+  const effectiveAdminClass = currentUser?.adminClass || adminClass;
+  const canManagePlatform = effectiveAdminClass === 'Platform Administration';
+  const canVerifyUsers = effectiveAdminClass === 'Platform Administration' || effectiveAdminClass === 'Verification Team';
 
   // Suppliers pending verification
   const pendingSuppliers = suppliers.filter(s => s.verified === 'Pending' || s.verified === 'Re-verify' || s.verified === 'Overdue');
 
   const getVerifiedBadgeStyle = (verifiedState) => {
     switch (verifiedState) {
+      case 'Approved':
       case 'Verified': return 'bg-emerald-100 text-emerald-800';
+      case 'Active': return 'bg-emerald-100 text-emerald-800';
       case 'Pending': return 'bg-amber-100 text-amber-800';
       case 'Re-verify': return 'bg-purple-100 text-purple-800';
       case 'Overdue': return 'bg-red-100 text-red-800';
+      case 'Rejected':
+      case 'Suspended': return 'bg-red-100 text-red-800';
       default: return 'bg-slate-100 text-slate-500';
     }
   };
 
-  const filteredUsersList = suppliers.filter(s => {
+  const supplierByUserId = suppliers.reduce((map, supplier) => {
+    if (supplier.userId) map[supplier.userId] = supplier;
+    return map;
+  }, {});
+
+  const platformUsers = users.length > 0
+    ? users.map(user => ({
+        ...user,
+        supplierProfile: supplierByUserId[user.id],
+        displayType: user.role === 'supplier' ? supplierByUserId[user.id]?.type || 'Supplier' : user.buyerType || user.role
+      }))
+    : suppliers.map(supplier => ({
+        id: supplier.userId || supplier.id,
+        name: supplier.name,
+        role: 'supplier',
+        accountStatus: supplier.verified === 'Rejected' ? 'Suspended' : 'Active',
+        joinedDate: supplier.joinedDate,
+        location: supplier.location,
+        supplierProfile: supplier,
+        displayType: supplier.type
+      }));
+  const pendingUserVerifications = platformUsers.filter(user => user.role !== 'admin' && !user.verified);
+
+  const filteredUsersList = platformUsers.filter(user => {
     const term = userSearchText.toLowerCase();
-    const matchesSearch = s.name.toLowerCase().includes(term) || s.location.toLowerCase().includes(term) || (s.gstin?.toLowerCase() || '').includes(term);
+    const supplier = user.supplierProfile;
+    const matchesSearch = (
+      user.name?.toLowerCase().includes(term) ||
+      user.email?.toLowerCase().includes(term) ||
+      user.location?.toLowerCase().includes(term) ||
+      supplier?.gstin?.toLowerCase().includes(term)
+    );
     
     if (userFilter === 'All') return matchesSearch;
-    if (userFilter === 'Pending') return matchesSearch && (s.verified === 'Pending' || s.verified === 'Overdue');
-    if (userFilter === 'Supplier') return matchesSearch && s.type !== 'Customer';
-    if (userFilter === 'Customer') return matchesSearch && s.type === 'Customer';
+    if (userFilter === 'Pending') return matchesSearch && (!user.verified || supplier?.verified === 'Pending' || supplier?.verified === 'Overdue');
+    if (userFilter === 'Suspended') return matchesSearch && user.accountStatus === 'Suspended';
+    if (userFilter === 'Supplier') return matchesSearch && user.role === 'supplier';
+    if (userFilter === 'Customer') return matchesSearch && user.role === 'customer';
     return matchesSearch;
   });
+
+  const handleCategorySubmit = async (e) => {
+    e.preventDefault();
+    if (!categoryName.trim()) return;
+
+    const result = await onAddCategory({
+      name: categoryName,
+      description: categoryDescription,
+      status: 'Active'
+    });
+
+    if (result?.ok) {
+      setCategoryName('');
+      setCategoryDescription('');
+    }
+  };
+
+  const categoryCounts = categories.map(category => ({
+    ...category,
+    requirementsCount: requirements.filter(req => req.category === category.name).length,
+    suppliersCount: suppliers.filter(supplier => String(supplier.primaryCategories || '').includes(category.name)).length
+  }));
+  const totalRequirementsCount = requirements.length || 0;
+  const categoryChartColors = ['bg-blue-600', 'bg-indigo-600', 'bg-teal-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500'];
+  const categoryDemography = categoryCounts
+    .map((category, index) => ({
+      ...category,
+      percent: totalRequirementsCount > 0 ? Math.round((category.requirementsCount / totalRequirementsCount) * 100) : 0,
+      color: categoryChartColors[index % categoryChartColors.length]
+    }))
+    .filter(category => category.requirementsCount > 0 || category.suppliersCount > 0)
+    .sort((a, b) => b.requirementsCount - a.requirementsCount || b.suppliersCount - a.suppliersCount)
+    .slice(0, 6);
 
   return (
     <div className="flex flex-col md:flex-row flex-1 bg-slate-50 text-slate-800 overflow-hidden" id="admin-panel-root">
@@ -73,7 +161,23 @@ export default function AdminPanel({
 
         {/* Navigation items */}
         <nav className="flex-1 p-3 space-y-1">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block px-3 py-1.5">Overview</span>
+          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block px-3 py-1.5">Admin Classes</span>
+
+          {['Platform Administration', 'Verification Team'].map(label => (
+            <button
+              key={label}
+              onClick={() => !currentUser?.adminClass && setAdminClass(label)}
+              disabled={Boolean(currentUser?.adminClass) && effectiveAdminClass !== label}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-xs rounded-lg font-medium transition-colors ${
+                effectiveAdminClass === label ? 'bg-indigo-50 text-indigo-700' : 'text-slate-400'
+              }`}
+            >
+              {label === 'Platform Administration' ? <Shield className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+              <span>{label}</span>
+            </button>
+          ))}
+
+          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-4 pb-1.5 px-3">Overview</span>
           
           <button 
             onClick={() => setActiveTab('dash')}
@@ -83,7 +187,7 @@ export default function AdminPanel({
             <span>Dashboard</span>
           </button>
 
-          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-4 pb-1.5 px-3">User Control</span>
+          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-4 pb-1.5 px-3">Verification Team</span>
 
           <button 
             onClick={() => setActiveTab('verify')}
@@ -93,7 +197,7 @@ export default function AdminPanel({
               <UserCheck className="w-4 h-4" />
               <span>Verification Queue</span>
             </div>
-            <span className="bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full text-[10px]">{pendingSuppliers.length}</span>
+            <span className="bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full text-[10px]">{pendingSuppliers.length + pendingUserVerifications.length}</span>
           </button>
 
           <button 
@@ -104,7 +208,9 @@ export default function AdminPanel({
             <span>All Users</span>
           </button>
 
-          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-4 pb-1.5 px-3">Master Audit</span>
+          {canManagePlatform && (
+            <>
+          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-4 pb-1.5 px-3">Platform Administration</span>
 
           <button 
             onClick={() => setActiveTab('reqs')}
@@ -131,6 +237,24 @@ export default function AdminPanel({
             <Sliders className="w-4 h-4" />
             <span>Business Rules</span>
           </button>
+
+          <button 
+            onClick={() => setActiveTab('categories')}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-xs rounded-lg font-medium transition-colors ${activeTab === 'categories' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            <Tags className="w-4 h-4" />
+            <span>Manage Categories</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('reports')}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-xs rounded-lg font-medium transition-colors ${activeTab === 'reports' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            <FileBarChart className="w-4 h-4" />
+            <span>Generate Report</span>
+          </button>
+            </>
+          )}
 
           <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-4 pb-1.5 px-3">Platform Health</span>
 
@@ -175,6 +299,8 @@ export default function AdminPanel({
             {activeTab === 'reqs' && 'Core Customer RFP Index'}
             {activeTab === 'suppliers' && 'Fulfillment Supplier Registry'}
             {activeTab === 'rules' && 'RASMP Business Rule Compliance'}
+            {activeTab === 'categories' && 'Manage Marketplace Categories'}
+            {activeTab === 'reports' && 'Generate Platform Report'}
             {activeTab === 'tech' && 'Database Schema & Server Status'}
             {activeTab === 'alerts' && 'Critical Infrastructure Warnings'}
           </h1>
@@ -183,7 +309,7 @@ export default function AdminPanel({
             className="inline-flex items-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
           >
             <UserCheck className="w-3.5 h-3.5" />
-            <span>Fulfill Verifications ({pendingSuppliers.length})</span>
+            <span>Fulfill Verifications ({pendingSuppliers.length + pendingUserVerifications.length})</span>
           </button>
         </header>
 
@@ -208,7 +334,7 @@ export default function AdminPanel({
                       <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total System Members</span>
                       <Users className="w-4 h-4 text-slate-400" />
                     </div>
-                    <div className="text-2xl font-bold text-slate-900">{suppliers.length + 2}</div>
+                    <div className="text-2xl font-bold text-slate-900">{platformUsers.length}</div>
                     
                   </div>
 
@@ -226,8 +352,8 @@ export default function AdminPanel({
                       <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Verification Waiting</span>
                       <UserCheck className="w-4 h-4 text-slate-400" />
                     </div>
-                    <div className="text-2xl font-bold text-slate-900">{pendingSuppliers.length}</div>
-                    <p className="text-[10px] text-red-500 font-semibold mt-1">{pendingSuppliers.filter(s => s.verified === 'Overdue').length} critical warnings</p>
+                    <div className="text-2xl font-bold text-slate-900">{pendingSuppliers.length + pendingUserVerifications.length}</div>
+                    <p className="text-[10px] text-red-500 font-semibold mt-1">{pendingSuppliers.filter(s => s.verified === 'Overdue').length} supplier warnings</p>
                   </div>
 
                   <div className="bg-white p-4 rounded-xl border border-slate-200">
@@ -290,45 +416,28 @@ export default function AdminPanel({
                   <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2">
                       <Sliders className="w-4 h-4 text-indigo-500" />
-                      <span>Platform RFP Category Demography</span>
+                      <span>Platform Trading Segments / RFP Category Demography</span>
                     </h3>
                     <div className="space-y-3.5">
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="font-medium text-slate-700">IT / Software Infrastructure</span>
-                          <span className="font-semibold text-indigo-600">42 Requests</span>
+                      {categoryDemography.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-slate-400 font-semibold bg-slate-50 rounded-lg border border-slate-100">
+                          No live category activity yet. New requirements and suppliers will update this chart automatically.
                         </div>
-                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-blue-600 h-full rounded-full" style={{ width: '85%' }}></div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="font-medium text-slate-700">Raw Industrial components</span>
-                          <span className="font-semibold text-indigo-600">35 Requests</span>
-                        </div>
-                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-indigo-600 h-full rounded-full" style={{ width: '70%' }}></div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="font-medium text-slate-700">Pharma Logistics logistics</span>
-                          <span className="font-semibold text-indigo-600">24 Requests</span>
-                        </div>
-                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-teal-500 h-full rounded-full" style={{ width: '55%' }}></div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="font-medium text-slate-700">Agritech fresh organics</span>
-                          <span className="font-semibold text-indigo-600">12 Requests</span>
-                        </div>
-                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-emerald-500 h-full rounded-full" style={{ width: '30%' }}></div>
-                        </div>
-                      </div>
+                      ) : (
+                        categoryDemography.map(category => (
+                          <div key={category.id}>
+                            <div className="flex justify-between text-xs mb-1 gap-3">
+                              <span className="font-medium text-slate-700 truncate">{category.name}</span>
+                              <span className="font-semibold text-indigo-600 shrink-0">
+                                {category.requirementsCount} RFPs · {category.suppliersCount} suppliers
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                              <div className={`${category.color} h-full rounded-full`} style={{ width: `${Math.max(category.percent, category.requirementsCount > 0 ? 8 : 2)}%` }}></div>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 
@@ -372,6 +481,28 @@ export default function AdminPanel({
                             <p className="text-[11px] text-indigo-600 font-semibold">
                               Dossier: <span className="text-slate-600 font-medium italic">GStin certification ({sup.gstin}), Registered classifications ({sup.primaryCategories})</span>
                             </p>
+                            <div className="flex flex-wrap gap-2 pt-2">
+                              {(sup.documents || []).length === 0 ? (
+                                <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded">
+                                  No uploaded documents found
+                                </span>
+                              ) : (
+                                sup.documents.map(doc => (
+                                  <a
+                                    key={`${sup.id}-${doc.documentType}`}
+                                    href={doc.dataUrl}
+                                    download={doc.fileName}
+                                    className="inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded px-2 py-1 text-[10px] font-bold"
+                                  >
+                                    <Download className="w-3 h-3 text-indigo-600" />
+                                    <span>{doc.label || doc.documentType}</span>
+                                    <span className={`px-1 rounded ${doc.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : doc.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                      {doc.status || 'Pending'}
+                                    </span>
+                                  </a>
+                                ))
+                              )}
+                            </div>
                           </div>
 
                           <div className="flex gap-2 shrink-0 self-end md:self-center">
@@ -424,7 +555,7 @@ export default function AdminPanel({
 
                   {/* Filter tabs */}
                   <div className="flex gap-1.5">
-                    {['All', 'Customer', 'Supplier', 'Pending'].map(f => (
+                    {['All', 'Customer', 'Supplier', 'Pending', 'Suspended'].map(f => (
                       <button
                         key={f}
                         onClick={() => setUserFilter(f)}
@@ -440,6 +571,20 @@ export default function AdminPanel({
                   </div>
                 </div>
 
+                <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-red-700 block">Fraud suspension reason</span>
+                    <p className="text-[11px] text-red-700/80 font-semibold mt-0.5">This note is saved when an admin suspends a customer or supplier.</p>
+                  </div>
+                  <input
+                    type="text"
+                    value={suspensionReason}
+                    onChange={e => setSuspensionReason(e.target.value)}
+                    className="w-full sm:w-96 text-xs font-semibold rounded-lg border border-red-200 p-2 bg-white focus:outline-none focus:border-red-500"
+                    placeholder="Reason for suspension"
+                  />
+                </div>
+
                 {/* MEMBERS DATA GRID TABLE */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
                   <div className="overflow-x-auto">
@@ -447,50 +592,80 @@ export default function AdminPanel({
                       <thead className="bg-slate-50">
                         <tr>
                           <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company / Individual</th>
-                          <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Classifications</th>
+                          <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Role / Classifications</th>
                           <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location base</th>
                           <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Join date</th>
                           <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Trust Badging</th>
+                          <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">User Verification</th>
+                          <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fraud Control</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-slate-100">
-                        {/* Pre-populated client lists */}
-                        <tr className="hover:bg-slate-50/50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0">PS</span>
-                              <div>
-                                <span className="font-bold text-xs text-slate-800 block">Priya Sharma</span>
-                                <span className="text-[10px] text-slate-400 font-semibold">Individual buyer ID</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-slate-500">Retail procurement</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium">Pune, MH</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium">Nov 2, 2025</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">Verified</span>
-                          </td>
-                        </tr>
-
                         {filteredUsersList.map(member => (
-                          <tr key={member.id} className="hover:bg-slate-50/50">
+                          <tr key={member._id} className="hover:bg-slate-50/50">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center gap-2">
-                                <span className="w-8 h-8 rounded bg-slate-100 text-[10px] font-bold border flex items-center justify-center shrink-0">{member.initials}</span>
+                                <span className="w-8 h-8 rounded bg-slate-100 text-[10px] font-bold border flex items-center justify-center shrink-0">{member.initials || 'CS'}</span>
                                 <div>
                                   <span className="font-bold text-xs text-slate-800 block">{member.name}</span>
-                                  <span className="text-[10px] text-slate-400 font-semibold">{member.type} badge</span>
+                                  <span className="text-[10px] text-slate-400 font-semibold">{member.email || member.supplierProfile?.gstin || 'No email on file'}</span>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-slate-500">{member.primaryCategories || 'Various sectors'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium">{member.location}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-slate-500">
+                              <span className="font-bold capitalize text-slate-800">{member.role}</span>
+                              <span className="block text-[10px] text-slate-400">{member.supplierProfile?.primaryCategories || member.displayType || 'Platform account'}</span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium">{member.location || member.supplierProfile?.location || 'Not set'}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium">{member.joinedDate}</td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${getVerifiedBadgeStyle(member.verified)}`}>
-                                {member.verified}
+                                {member.role === 'supplier' ? member.supplierProfile?.verified || 'Pending' : member.accountStatus || 'Active'}
                               </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {member.role === 'admin' ? (
+                                <span className="text-[10px] font-bold text-slate-400">System admin</span>
+                              ) : member.verified ? (
+                                <button
+                                  onClick={() => onUpdateUserVerification(member.id, false)}
+                                  disabled={!canVerifyUsers}
+                                  className="inline-flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 rounded text-[10px] font-bold disabled:opacity-50"
+                                >
+                                  Mark Pending
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => onUpdateUserVerification(member.id, true)}
+                                  disabled={!canVerifyUsers}
+                                  className="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-1 rounded text-[10px] font-bold disabled:opacity-50"
+                                >
+                                  Verify User
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {member.role === 'admin' ? (
+                                <span className="text-[10px] font-bold text-slate-400">Protected</span>
+                              ) : !canManagePlatform ? (
+                                <span className="text-[10px] font-bold text-slate-400">Platform only</span>
+                              ) : member.accountStatus === 'Suspended' ? (
+                                <button
+                                  onClick={() => onUpdateUserStatus(member.id, 'Active', '')}
+                                  className="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-1 rounded text-[10px] font-bold"
+                                >
+                                  <RefreshCcw className="w-3 h-3" />
+                                  Reactivate
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => onUpdateUserStatus(member.id, 'Suspended', suspensionReason)}
+                                  className="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded text-[10px] font-bold"
+                                >
+                                  <Ban className="w-3 h-3" />
+                                  Suspend
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -604,9 +779,143 @@ export default function AdminPanel({
               </motion.div>
             )}
 
-            {/* TAB 7: TECH & PERFORMANCE (SCHEMA & TELEMETRY DB) */}
+            {/* TAB 7: CATEGORY MANAGEMENT */}
+            {activeTab === 'categories' && (
+              <motion.div 
+                key="categories" 
+                initial={{ opacity: 0, y: 15 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.15 }}
+                className="space-y-4"
+              >
+                <form onSubmit={handleCategorySubmit} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                    <Tags className="w-4 h-4 text-indigo-600" />
+                    <h3 className="font-bold text-slate-900 text-sm">Add Marketplace Category</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      type="text"
+                      value={categoryName}
+                      onChange={e => setCategoryName(e.target.value)}
+                      placeholder="Category name"
+                      className="text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-indigo-600"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={categoryDescription}
+                      onChange={e => setCategoryDescription(e.target.value)}
+                      placeholder="Category description"
+                      className="md:col-span-2 text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <button type="submit" className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold border-0 cursor-pointer">
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Category
+                    </button>
+                  </div>
+                </form>
 
-            {/* TAB 8: ALERTS & INTELLIGENT MATCHING ADVISORY */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {categoryCounts.map(category => (
+                    <div key={category.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">{category.name}</h4>
+                          <p className="text-[11px] text-slate-500 font-medium mt-1">{category.description || 'No description added.'}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${category.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>
+                          {category.status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-slate-50 border border-slate-100 rounded-lg p-2">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">RFPs</span>
+                          <span className="font-bold text-slate-900">{category.requirementsCount}</span>
+                        </div>
+                        <div className="bg-slate-50 border border-slate-100 rounded-lg p-2">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Suppliers</span>
+                          <span className="font-bold text-slate-900">{category.suppliersCount}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateCategory(category.id, { status: category.status === 'Active' ? 'Suspended' : 'Active' })}
+                        className={`w-full px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
+                          category.status === 'Active'
+                            ? 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'
+                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                        }`}
+                      >
+                        {category.status === 'Active' ? 'Suspend Category' : 'Reactivate Category'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* TAB 8: REPORTS */}
+            {activeTab === 'reports' && (
+              <motion.div 
+                key="reports" 
+                initial={{ opacity: 0, y: 15 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.15 }}
+                className="space-y-4"
+              >
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <FileBarChart className="w-4 h-4 text-indigo-600" />
+                      <span>Platform Operations Report</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium mt-1">Generate a live summary of users, suppliers, requirements, quotations, categories, and suspensions.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onGenerateReport}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold border-0 cursor-pointer"
+                  >
+                    Generate Report
+                  </button>
+                </div>
+
+                {adminReport ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      ['Total users', adminReport.totalUsers],
+                      ['Suspended users', adminReport.suspendedUsers],
+                      ['Total suppliers', adminReport.totalSuppliers],
+                      ['Pending suppliers', adminReport.pendingSuppliers],
+                      ['Total requirements', adminReport.totalRequirements],
+                      ['Open requirements', adminReport.openRequirements],
+                      ['Total quotations', adminReport.totalQuotations],
+                      ['Active categories', adminReport.activeCategories]
+                    ].map(([label, value]) => (
+                      <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+                        <div className="text-2xl font-bold text-slate-900 mt-1">{value}</div>
+                      </div>
+                    ))}
+                    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs sm:col-span-2 lg:col-span-4">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Generated at</span>
+                      <div className="text-xs font-semibold text-slate-700 mt-1">{new Date(adminReport.generatedAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-xs text-slate-500 font-semibold">
+                    No report generated yet.
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* TAB 9: ALERTS & INTELLIGENT MATCHING ADVISORY */}
             {activeTab === 'alerts' && (
               <motion.div 
                 key="alerts" 

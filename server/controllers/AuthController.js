@@ -18,6 +18,10 @@ const login = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
+    if (user.accountStatus === 'Suspended') {
+      return res.status(403).json({ message: `Account suspended${user.suspensionReason ? `: ${user.suspensionReason}` : '.'}` });
+    }
+
     res.json({
       user: publicUser(user),
       token: signToken(user),
@@ -74,7 +78,7 @@ const register = async (req, res, next) => {
       id: userId(),
       email: normalizedEmail,
       initials: incoming.initials || initialsFor(name),
-      verified: true,
+      verified: false,
       joinedDate: incoming.joinedDate || new Date().toISOString().split('T')[0],
       passwordHash: await bcrypt.hash(password, 10)
     });
@@ -85,7 +89,7 @@ const register = async (req, res, next) => {
         userId: user.id,
         name: incoming.companyName || name,
         initials: user.initials,
-        location: incoming.location || 'Mumbai, MH',
+        location: incoming.location || 'Nagpur, MH',
         rating: 4.5,
         qualityRating: 4.6,
         priceLevel: 'INR INR',

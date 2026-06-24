@@ -17,6 +17,10 @@ const auth = (roles = []) => async (req, res, next) => {
       return res.status(401).json({ message: 'Session user no longer exists.' });
     }
 
+    if (user.accountStatus === 'Suspended') {
+      return res.status(403).json({ message: `Account suspended${user.suspensionReason ? `: ${user.suspensionReason}` : '.'}` });
+    }
+
     if (roles.length > 0 && !roles.includes(user.role)) {
       return res.status(403).json({ message: 'This role cannot perform that action.' });
     }

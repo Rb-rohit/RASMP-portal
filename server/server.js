@@ -15,6 +15,7 @@ const quotationRoutes = require('./routes/QuotationRoute');
 const supplierRoutes = require('./routes/SupplierRoute');
 const customerRoutes = require('./routes/CustomerRoute');
 const notificationRoutes = require('./routes/NotificationRoute');
+const adminRoutes = require('./routes/AdminRoute');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,6 +51,7 @@ app.use('/api/quotations', quotationRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use('/api', notFound);
 

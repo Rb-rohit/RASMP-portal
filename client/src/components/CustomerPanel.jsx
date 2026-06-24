@@ -41,7 +41,7 @@ export default function CustomerPanel({
   onSelectQuotation,
   onShortlistQuotation,
   onSendQuotationMessage,
-  onClearNotifications,
+  onClearNotifications, 
   onDeleteRequirement,
   onUpdateRequirement,
   onRequirementStatusChange,
@@ -834,8 +834,8 @@ export default function CustomerPanel({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1">
+                    <div>
+                      {/* <div className="space-y-1">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Industry</label>
                         <input
                           type="text"
@@ -844,7 +844,7 @@ export default function CustomerPanel({
                           placeholder="e.g. Cloud infrastructure, Fasteners, Fresh produce"
                           className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600 mt-1"
                         />
-                      </div>
+                      </div> */}
 
                       <div className="space-y-1">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Preferred Supplier Type</label>
@@ -919,7 +919,7 @@ export default function CustomerPanel({
                         type="text" 
                         value={location} 
                         onChange={e => setLocation(e.target.value)}
-                        placeholder="e.g. Pune Assembly Hub, MH"
+                        placeholder="e.g. Nagpur, MH"
                         className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 focus:outline-none focus:border-blue-600 mt-1"
                       />
                     </div>

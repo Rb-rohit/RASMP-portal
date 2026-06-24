@@ -91,6 +91,52 @@ export default function SupplierPanel({
 
   const myQuotations = quotations.filter(q => q.supplierId === activeSupplier?.id);
   const awardedOrders = myQuotations.filter(q => q.status === 'Awarded');
+  const supplierCategoryColors = ['bg-emerald-600', 'bg-teal-500', 'bg-blue-500', 'bg-amber-500', 'bg-purple-500'];
+  const supplierCategoryRatios = Object.values(matchedLeads.reduce((groups, lead) => {
+    const categoryName = lead.category || 'Uncategorized';
+    if (!groups[categoryName]) {
+      groups[categoryName] = {
+        name: categoryName,
+        leadsCount: 0,
+        totalMatch: 0
+      };
+    }
+    groups[categoryName].leadsCount += 1;
+    groups[categoryName].totalMatch += lead.supplierMatchScore || 0;
+    return groups;
+  }, {}))
+    .map((category, index) => ({
+      ...category,
+      percent: matchedLeads.length > 0 ? Math.round((category.leadsCount / matchedLeads.length) * 100) : 0,
+      averageMatch: Math.round(category.totalMatch / Math.max(category.leadsCount, 1)),
+      color: supplierCategoryColors[index % supplierCategoryColors.length]
+    }))
+    .sort((a, b) => b.leadsCount - a.leadsCount)
+    .slice(0, 5);
+  const supplierComplianceRatios = [
+    {
+      label: 'Verification readiness',
+      value: supplierApproved ? 100 : supplierStatus === 'Pending' ? 50 : 0
+    },
+    {
+      label: 'Profile completeness',
+      value: Math.round([
+        activeSupplier?.name,
+        activeSupplier?.gstin,
+        activeSupplier?.location,
+        activeSupplier?.primaryCategories,
+        activeSupplier?.certifications
+      ].filter(Boolean).length / 5 * 100)
+    },
+    {
+      label: 'Quote response rate',
+      value: Math.round((myQuotations.length / Math.max(matchedLeads.length + myQuotations.length, 1)) * 100)
+    },
+    {
+      label: 'Award conversion',
+      value: Math.round((awardedOrders.length / Math.max(myQuotations.length, 1)) * 100)
+    }
+  ];
 
   const handleProfileSave = (e) => {
     e.preventDefault();
@@ -454,36 +500,51 @@ export default function SupplierPanel({
                 <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2">
                     <Activity className="w-4 h-4 text-emerald-500" />
+                    <span>Bar Graph Category Ratio</span>
+                  </h3>
+                  <div className="space-y-4">
+                    {supplierCategoryRatios.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-400 font-semibold bg-slate-50 rounded-lg border border-slate-100">
+                        No matched category activity yet.
+                      </div>
+                    ) : (
+                      supplierCategoryRatios.map(category => (
+                        <div key={category.name}>
+                          <div className="flex justify-between text-xs mb-1 gap-3">
+                            <span className="font-medium text-slate-700 truncate">{category.name}</span>
+                            <span className="font-bold text-emerald-700 shrink-0">{category.percent}% · Match {category.averageMatch}%</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div className={`${category.color} h-full rounded-full`} style={{ width: `${Math.max(category.percent, 4)}%` }}></div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
                     <span>My Platform Fulfillment Compliance Ratio</span>
                   </h3>
                   <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-medium text-slate-700">Precision Industrial Components</span>
-                        <span className="font-bold text-emerald-700">95% Rating</span>
+                    {supplierComplianceRatios.map(item => (
+                      <div key={item.label}>
+                        <div className="flex justify-between text-xs mb-1 gap-3">
+                          <span className="font-medium text-slate-700 truncate">{item.label}</span>
+                          <span className={`font-bold shrink-0 ${item.value >= 75 ? 'text-emerald-700' : item.value >= 45 ? 'text-amber-700' : 'text-red-700'}`}>
+                            {item.value}% Rating
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div
+                            className={`${item.value >= 75 ? 'bg-emerald-600' : item.value >= 45 ? 'bg-amber-500' : 'bg-red-500'} h-full rounded-full`}
+                            style={{ width: `${Math.max(item.value, 4)}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-emerald-600 h-full rounded-full" style={{ width: '95%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-medium text-slate-700">Heavy Manufacturing Warehousing</span>
-                        <span className="font-bold text-emerald-700">82% Rating</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: '82%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-medium text-slate-700">Raw Alloy procurement</span>
-                        <span className="font-bold text-amber-700">68% Rating</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-amber-500 h-full rounded-full" style={{ width: '68%' }}></div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </motion.div>

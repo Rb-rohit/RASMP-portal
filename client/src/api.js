@@ -60,5 +60,10 @@ export const api = {
   updateSupplierProfile: (profile) => apiRequest('/suppliers/profile', { method: 'PATCH', body: profile }),
   updateCustomerProfile: (profile) => apiRequest('/customers/profile', { method: 'PATCH', body: profile }),
   changeCustomerPassword: (payload) => apiRequest('/customers/password', { method: 'PATCH', body: payload }),
+  updateUserVerification: (id, verified) => apiRequest(`/admin/users/${id}/verification`, { method: 'PATCH', body: { verified } }),
+  updateUserStatus: (id, payload) => apiRequest(`/admin/users/${id}/status`, { method: 'PATCH', body: payload }),
+  addCategory: (category) => apiRequest('/admin/categories', { method: 'POST', body: category }),
+  updateCategory: (id, category) => apiRequest(`/admin/categories/${id}`, { method: 'PATCH', body: category }),
+  generateAdminReport: () => apiRequest('/admin/reports', { method: 'POST' }),
   clearNotifications: (role) => apiRequest(`/notifications/${role}`, { method: 'DELETE' })
 };

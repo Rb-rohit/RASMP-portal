@@ -27,13 +27,18 @@ export default function App() {
   const [quotations, setQuotations] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [businessRules, setBusinessRules] = useState(initialBusinessRules);
+  const [users, setUsers] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [adminReport, setAdminReport] = useState(null);
 
   const applyServerData = (data) => {
-    setRequirements(data?.requirements);
-    setSuppliers(data?.suppliers);
-    setQuotations(data?.quotations);
-    setNotifications(data?.notifications);
+    setRequirements(data?.requirements || []);
+    setSuppliers(data?.suppliers || []);
+    setQuotations(data?.quotations || []);
+    setNotifications(data?.notifications || []);
     setBusinessRules(data?.businessRules || initialBusinessRules);
+    setUsers(data?.users || []);
+    setCategories(data?.categories || []);
   };
 
   // Load from local storage or set initial data
@@ -206,6 +211,62 @@ export default function App() {
       applyServerData(response.currentData);
     } catch (error) {
       alert(error.message);
+    }
+  };
+
+  const handleUpdateUserStatus = async (id, status, reason = '') => {
+    try {
+      const response = await api.updateUserStatus(id, { status, reason });
+      applyServerData(response.currentData);
+      return { ok: true };
+    } catch (error) {
+      alert(error.message);
+      return { ok: false, message: error.message };
+    }
+  };
+
+  const handleUpdateUserVerification = async (id, verified = true) => {
+    try {
+      const response = await api.updateUserVerification(id, verified);
+      applyServerData(response.currentData);
+      return { ok: true };
+    } catch (error) {
+      alert(error.message);
+      return { ok: false, message: error.message };
+    }
+  };
+
+  const handleAddCategory = async (category) => {
+    try {
+      const response = await api.addCategory(category);
+      applyServerData(response.currentData);
+      return { ok: true };
+    } catch (error) {
+      alert(error.message);
+      return { ok: false, message: error.message };
+    }
+  };
+
+  const handleUpdateCategory = async (id, updates) => {
+    try {
+      const response = await api.updateCategory(id, updates);
+      applyServerData(response.currentData);
+      return { ok: true };
+    } catch (error) {
+      alert(error.message);
+      return { ok: false, message: error.message };
+    }
+  };
+
+  const handleGenerateAdminReport = async () => {
+    try {
+      const response = await api.generateAdminReport();
+      setAdminReport(response.report);
+      applyServerData(response.currentData);
+      return { ok: true, report: response.report };
+    } catch (error) {
+      alert(error.message);
+      return { ok: false, message: error.message };
     }
   };
 
@@ -404,13 +465,22 @@ export default function App() {
 
         {activeRole === 'admin' && (
           <AdminPanel 
+            currentUser={currentUser}
             requirements={requirements}
             suppliers={suppliers}
             quotations={quotations}
+            users={users}
+            categories={categories}
+            adminReport={adminReport}
             notifications={notifications}
             businessRules={businessRules}
             onApproveSupplier={handleApproveSupplier}
             onRejectSupplier={handleRejectSupplier}
+            onUpdateUserVerification={handleUpdateUserVerification}
+            onUpdateUserStatus={handleUpdateUserStatus}
+            onAddCategory={handleAddCategory}
+            onUpdateCategory={handleUpdateCategory}
+            onGenerateReport={handleGenerateAdminReport}
             onClearNotifications={handleClearNotifications}
             onTriggerAdvisory={handleApproveSupplier}
           />
