@@ -689,7 +689,7 @@ export default function AdminPanel({
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
                   <div className="divide-y divide-slate-100">
                     {requirements.map(req => (
-                      <div key={req.id} className="p-4 flex items-center justify-between hover:bg-slate-50/50">
+                      <div key={req._id} className="p-4 flex items-center justify-between hover:bg-slate-50/50">
                         <div>
                           <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{req.title}</h4>
                           <p className="text-[11px] text-slate-500 font-medium">{req.category} | Location: {req.location} | Target range: {req.budgetRange}</p>

@@ -4,6 +4,7 @@ import {
   ClipboardList, 
   Plus, 
   Users, 
+  File,
   FileText, 
   Bell, 
   User, 
@@ -12,7 +13,6 @@ import {
   Truck, 
   Sprout, 
   Building2, 
-  Cpu, 
   MapPin, 
   Star, 
   Sparkles, 
@@ -35,6 +35,7 @@ export default function CustomerPanel({
   currentUser,
   requirements,
   suppliers,
+  categories = [],
   quotations,
   notifications,
   onAddRequirement,
@@ -50,7 +51,7 @@ export default function CustomerPanel({
 }) {
   const [activeTab, setActiveTab] = useState('dash');
   const [filterStatus, setFilterStatus] = useState('All');
-
+  
   // Input states for New Requirement
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('IT / Technology');
@@ -95,7 +96,7 @@ export default function CustomerPanel({
       case 'Logistics': return <Truck className="w-4 h-4" />;
       case 'Agriculture': return <Sprout className="w-4 h-4" />;
       case 'Real estate & construction': return <Building2 className="w-4 h-4" />;
-      default: return <Cpu className="w-4 h-4" />;
+      default: return <File className="w-4 h-4" />;
     }
   };
 
@@ -200,15 +201,29 @@ export default function CustomerPanel({
     if (supplier.verified === 'Approved' || supplier.verified === 'Verified') score += 10;
     return Math.min(score, 100);
   };
-  const latestOpenRequirement = requirements.find(req => !['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req))) || requirements[0];
-  const matchedSuppliers = suppliers
-    .filter(sup => sup.verified === 'Approved' || sup.verified === 'Verified')
-    .map(sup => ({
-      ...sup,
-      liveMatchPercent: latestOpenRequirement ? getSupplierMatchScore(latestOpenRequirement, sup) : sup.matchPercent
-    }))
-    .filter(sup => sup.liveMatchPercent >= 45 || latestOpenRequirement?.matchedSupplierIds?.includes(sup.id))
-    .sort((a, b) => b.liveMatchPercent - a.liveMatchPercent);
+  
+  const openRequirements = requirements.filter(req => !['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req)));
+  const verifiedSuppliers = suppliers.filter(sup => sup.verified === 'Approved' || sup.verified === 'Verified');
+
+  const matchedSuppliers = verifiedSuppliers.map(supplier => {
+    let bestMatch = { score: 0, requirement: null };
+
+    openRequirements.forEach(req => {
+      const score = getSupplierMatchScore(req, supplier);
+      if (score > bestMatch.score) {
+        bestMatch = { score, requirement: req };
+      }
+    });
+
+    const isPreMatched = openRequirements.some(req => (req.matchedSupplierIds || []).includes(supplier.id));
+
+    return {
+      ...supplier,
+      liveMatchPercent: bestMatch.score,
+      matchedRequirement: bestMatch.requirement,
+      isPreMatched,
+    };
+  }).filter(sup => sup.liveMatchPercent >= 45 || sup.isPreMatched).sort((a, b) => b.liveMatchPercent - a.liveMatchPercent);
 
   const filteredRequirements = requirements.filter(r => {
     if (filterStatus === 'All') return true;
@@ -382,9 +397,9 @@ export default function CustomerPanel({
               <Users className="w-4 h-4" />
               <span>Supplier Matches</span>
             </div>
-            <span className="bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded-full text-[10px]">
+            {/* <span className="bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded-full text-[10px]">
               {suppliers.filter(s => s.verified === 'Approved' || s.verified === 'Verified').length}
-            </span>
+            </span> */}
           </button>
 
           <button 
@@ -395,7 +410,7 @@ export default function CustomerPanel({
               <FileText className="w-4 h-4" />
               <span>Quotations</span>
             </div>
-            <span className="bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded-full text-[10px]">{quotations.length}</span>
+            {/* <span className="bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded-full text-[10px]">{quotations.length}</span> */}
           </button>
 
           <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-4 pb-1.5 px-3">System Settings</span>
@@ -704,10 +719,10 @@ export default function CustomerPanel({
 
                             <button 
                               onClick={() => openRequirementModal(req, 'edit')}
-                              disabled={['Closed', 'Cancelled'].includes(getRequirementStatus(req))}
+                              disabled={['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req))}
                               className={`p-1.5 rounded-lg border transition-colors ${
-                                ['Closed', 'Cancelled'].includes(getRequirementStatus(req))
-                                  ? 'border-slate-200 text-slate-300 cursor-not-allowed'
+                                ['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req))
+                                  ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
                                   : 'border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/50'
                               }`}
                               title="Edit requirement"
@@ -723,15 +738,18 @@ export default function CustomerPanel({
                               <Activity className="w-3.5 h-3.5" />
                             </button>
 
-                            {!['Closed', 'Cancelled'].includes(getRequirementStatus(req)) && (
-                              <button 
-                                onClick={() => handleStatusAction(req, 'Cancelled')}
-                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50/50 transition-colors"
-                                title="Cancel requirement"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            <button 
+                              onClick={() => handleStatusAction(req, 'Cancelled')}
+                              disabled={['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req))}
+                              className={`p-1.5 rounded-lg border transition-colors ${
+                                ['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req))
+                                  ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+                                  : 'border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50/50'
+                              }`}
+                              title="Cancel requirement"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                            </button>
 
                             {getRequirementStatus(req) === 'Supplier selected' && (
                               <button 
@@ -745,8 +763,13 @@ export default function CustomerPanel({
 
                             <button 
                               onClick={() => onDeleteRequirement(req.id)}
-                              className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50/50 transition-colors"
+                              disabled={['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req))}
                               title="Delete requirement"
+                              className={`p-1.5 rounded-lg border transition-colors ${
+                                ['Supplier selected', 'Closed', 'Cancelled'].includes(getRequirementStatus(req))
+                                  ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+                                  : 'border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50/50'
+                              }`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -813,11 +836,9 @@ export default function CustomerPanel({
                           onChange={e => setCategory(e.target.value)}
                           className="w-full text-xs font-medium rounded-lg border border-slate-200 p-2.5 bg-white focus:outline-none focus:border-blue-600 mt-1"
                         >
-                          <option>IT / Technology</option>
-                          <option>Industrial & manufacturing</option>
-                          <option>Logistics</option>
-                          <option>Agriculture</option>
-                          <option>Real estate & construction</option>
+                          {categories.map(cat => (
+                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                          ))}
                         </select>
                       </div>
 
@@ -966,13 +987,15 @@ export default function CustomerPanel({
                 transition={{ duration: 0.15 }}
                 className="space-y-4"
               >
-                {latestOpenRequirement && (
+                {openRequirements.length > 0 ? (
                   <div className="bg-white border border-slate-200 rounded-xl p-4">
                     <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Auto-match basis</span>
-                    <h3 className="font-bold text-slate-900 text-xs sm:text-sm mt-1">{latestOpenRequirement.title}</h3>
-                    <p className="text-[11px] text-slate-500 font-semibold mt-1">
-                      Matching parameters: {latestOpenRequirement.category} | {latestOpenRequirement.location || 'Any location'} | {latestOpenRequirement.industry || latestOpenRequirement.category} | {latestOpenRequirement.preferredSupplierType || 'Any supplier type'}
-                    </p>
+                    <h3 className="font-bold text-slate-900 text-xs sm:text-sm mt-1">Showing best supplier matches for your {openRequirements.length} active requirement(s)</h3>
+                  </div>
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 text-center">
+                    <h3 className="font-bold text-slate-800">No Active Requirements</h3>
+                    <p className="text-xs text-slate-500 mt-1">Post a new requirement to see matched suppliers here.</p>
                   </div>
                 )}
 
@@ -1018,6 +1041,12 @@ export default function CustomerPanel({
                           <span className="font-bold text-slate-700 text-xs">{sup.priceLevel}</span>
                         </div>
                       </div>
+
+                      {sup.matchedRequirement && (
+                        <div className="text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 p-2 rounded-md">
+                          Best match for: <span className="font-bold text-slate-700 truncate">{sup.matchedRequirement.title}</span>
+                        </div>
+                      )}
 
                       {/* Core Algorithm Match Gauge */}
                       <div className="flex justify-between items-center text-xs pt-1">
@@ -1530,12 +1559,9 @@ export default function CustomerPanel({
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Category</label>
                     <select value={editRequirement.category} onChange={e => setEditRequirement({ ...editRequirement, category: e.target.value })} className="w-full text-xs font-semibold rounded-lg border border-slate-200 p-2.5 bg-white focus:outline-none focus:border-blue-600">
-                      <option>IT / Technology</option>
-                      <option>Industrial & manufacturing</option>
-                      <option>Logistics</option>
-                      <option>Agriculture</option>
-                      <option>Real estate & construction</option>
-                      <option>Professional services</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-1">

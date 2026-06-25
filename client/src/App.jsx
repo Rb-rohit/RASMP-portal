@@ -435,6 +435,7 @@ export default function App() {
             requirements={requirements}
             suppliers={suppliers}
             quotations={quotations}
+            categories={categories}
             notifications={notifications}
             onAddRequirement={handleAddRequirement}
             onSelectQuotation={handleSelectQuotation}
