@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Supplier = require('../models/Supplier');
 const buildBootstrap = require('../services/bootstrapService');
+const { addNotification } = require('../services/notificationService');
 const signToken = require('../utils/token');
 const { nextId, userId } = require('../utils/id');
 const { initialsFor, publicUser } = require('../utils/user');
@@ -116,10 +117,18 @@ const register = async (req, res, next) => {
       });
     }
 
+    await addNotification({
+      title: `Welcome to RASMP, ${user.name}!`,
+      description: 'Your account is set up and ready. Explore the dashboard to manage requests, bids, and supplier matches.',
+      type: 'success',
+      role,
+      userId: user.id
+    });
+
     res.status(201).json({
       user: publicUser(user),
       token: signToken(user),
-      ...(await buildBootstrap(user))
+      ...(await buildBootstrap(user, { includeRoleNotifications: false }))
     });
   } catch (error) {
     next(error);

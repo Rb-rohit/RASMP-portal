@@ -114,7 +114,8 @@ const createQuotation = async (req, res, next) => {
       title: `Quotation Received from ${supplier.name}!`,
       description: `${supplier.name} offered a proposal of ${price} with ${deliveryTime} delivery.`,
       type: 'info',
-      role: 'customer'
+      role: 'customer',
+      userId: requirement.customerId
     });
 
     res.status(201).json(await buildBootstrap(req.user));
@@ -143,7 +144,8 @@ const shortlistQuotation = async (req, res, next) => {
         title: 'Supplier shortlisted',
         description: `${quote.supplierName} has been shortlisted for "${quote.requirementTitle}".`,
         type: 'success',
-        role: 'customer'
+        role: 'customer',
+        userId: req.user.id
       })
     ]);
 
@@ -165,6 +167,8 @@ const selectQuotation = async (req, res, next) => {
       return res.status(403).json({ message: 'You cannot select this quotation.' });
     }
 
+    const awardedSupplier = await Supplier.findOne({ id: selectedQuote.supplierId });
+
     await Promise.all([
       Quotation.updateOne({ id: selectedQuote.id }, { status: 'Awarded' }),
       Quotation.updateMany(
@@ -183,7 +187,8 @@ const selectQuotation = async (req, res, next) => {
         title: 'Contract Bid Awarded!',
         description: `Your bid on "${selectedQuote.requirementTitle}" has been approved.`,
         type: 'success',
-        role: 'supplier'
+        role: 'supplier',
+        ...(awardedSupplier?.userId ? { userId: awardedSupplier.userId } : {})
       })
     ]);
 
@@ -221,12 +226,26 @@ const sendQuotationMessage = async (req, res, next) => {
     ];
     await quote.save();
 
-    await addNotification({
+    const messageNotification = {
       title: 'New quotation message',
       description: `${req.user.name} sent a message on "${quote.requirementTitle}".`,
       type: 'info',
       role: req.user.role === 'supplier' ? 'customer' : 'supplier'
-    });
+    };
+
+    if (req.user.role === 'supplier') {
+      const requirement = await Requirement.findOne({ id: quote.requirementId });
+      if (requirement?.customerId) {
+        messageNotification.userId = requirement.customerId;
+      }
+    } else {
+      const supplier = await Supplier.findOne({ id: quote.supplierId });
+      if (supplier?.userId) {
+        messageNotification.userId = supplier.userId;
+      }
+    }
+
+    await addNotification(messageNotification);
 
     res.json(await buildBootstrap(req.user));
   } catch (error) {

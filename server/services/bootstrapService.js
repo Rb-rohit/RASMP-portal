@@ -10,8 +10,9 @@ const sortByNewestMongoDoc = { createdAt: -1 };
 
 const publicRequirementStatuses = ['Open', 'Under review'];
 
-const buildBootstrap = async (user = null) => {
+const buildBootstrap = async (user = null, options = {}) => {
   const role = user?.role;
+  const includeRoleNotifications = options.includeRoleNotifications !== false;
 
   if (!role) {
     const [businessRules, categories] = await Promise.all([
@@ -51,8 +52,17 @@ const buildBootstrap = async (user = null) => {
     ? { id: supplierProfile?.id || '__none__' }
     : {};
 
-  const notificationFilter = role
-    ? { role }
+  const notificationFilter = user
+    ? (user.role === 'customer' || user.role === 'supplier')
+      ? { userId: user.id }
+      : includeRoleNotifications
+        ? {
+            $or: [
+              { userId: user.id }, // Notifications for this specific user
+              { role: user.role, userId: { $exists: false } } // Notifications for the user's role without a specific userId
+            ]
+          }
+        : { userId: user.id }
     : {};
 
   const [requirements, suppliers, quotations, notifications, businessRules, categories, users] = await Promise.all([

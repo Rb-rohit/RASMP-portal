@@ -87,9 +87,11 @@ export default function AdminPanel({
         joinedDate: supplier.joinedDate,
         location: supplier.location,
         supplierProfile: supplier,
-        displayType: supplier.type
+        displayType: supplier.type,
+        verified: supplier.verified === 'Approved' || supplier.verified === 'Verified'
       }));
-  const pendingUserVerifications = platformUsers.filter(user => user.role !== 'admin' && !user.verified);
+  const pendingUserVerifications = platformUsers.filter(user => user.role !== 'admin' && user.verified === false);
+  const pendingVerificationTasks = pendingSuppliers.length + pendingUserVerifications.length;
 
   const filteredUsersList = platformUsers.filter(user => {
     const term = userSearchText.toLowerCase();
@@ -197,7 +199,7 @@ export default function AdminPanel({
               <UserCheck className="w-4 h-4" />
               <span>Verification Queue</span>
             </div>
-            <span className="bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full text-[10px]">{pendingSuppliers.length + pendingUserVerifications.length}</span>
+            <span className="bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full text-[10px]">{pendingVerificationTasks}</span>
           </button>
 
           <button 
@@ -309,7 +311,7 @@ export default function AdminPanel({
             className="inline-flex items-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
           >
             <UserCheck className="w-3.5 h-3.5" />
-            <span>Fulfill Verifications ({pendingSuppliers.length + pendingUserVerifications.length})</span>
+            <span>Fulfill Verifications ({pendingVerificationTasks})</span>
           </button>
         </header>
 
@@ -352,7 +354,7 @@ export default function AdminPanel({
                       <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Verification Waiting</span>
                       <UserCheck className="w-4 h-4 text-slate-400" />
                     </div>
-                    <div className="text-2xl font-bold text-slate-900">{pendingSuppliers.length + pendingUserVerifications.length}</div>
+                    <div className="text-2xl font-bold text-slate-900">{pendingVerificationTasks}</div>
                     <p className="text-[10px] text-red-500 font-semibold mt-1">{pendingSuppliers.filter(s => s.verified === 'Overdue').length} supplier warnings</p>
                   </div>
 
@@ -463,64 +465,101 @@ export default function AdminPanel({
                   </div>
 
                   <div className="divide-y divide-slate-100">
-                    {pendingSuppliers.length === 0 ? (
+                    {pendingUserVerifications.length === 0 && pendingSuppliers.length === 0 ? (
                       <div className="p-12 text-center text-slate-500 space-y-1">
                         <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
                         <h4 className="font-bold text-slate-800">Verified status current!</h4>
-                        <p className="text-xs">No corporate entities currently awaiting manual identity audits.</p>
+                        <p className="text-xs">No platform entities currently awaiting manual verification.</p>
                       </div>
                     ) : (
-                      pendingSuppliers.map(sup => (
-                        <div key={sup.id} className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                          <div className="space-y-1">
-                            <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded-full tracking-wider inline-block ${getVerifiedBadgeStyle(sup.verified)}`}>
-                              {sup.verified}
-                            </span>
-                            <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{sup.name}</h4>
-                            <p className="text-[11px] text-slate-500 font-medium">Headquarters Location: {sup.location} | Joined date: {sup.joinedDate}</p>
-                            <p className="text-[11px] text-indigo-600 font-semibold">
-                              Dossier: <span className="text-slate-600 font-medium italic">GStin certification ({sup.gstin}), Registered classifications ({sup.primaryCategories})</span>
-                            </p>
-                            <div className="flex flex-wrap gap-2 pt-2">
-                              {(sup.documents || []).length === 0 ? (
-                                <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded">
-                                  No uploaded documents found
-                                </span>
-                              ) : (
-                                sup.documents.map(doc => (
-                                  <a
-                                    key={`${sup.id}-${doc.documentType}`}
-                                    href={doc.dataUrl}
-                                    download={doc.fileName}
-                                    className="inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded px-2 py-1 text-[10px] font-bold"
-                                  >
-                                    <Download className="w-3 h-3 text-indigo-600" />
-                                    <span>{doc.label || doc.documentType}</span>
-                                    <span className={`px-1 rounded ${doc.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : doc.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                                      {doc.status || 'Pending'}
-                                    </span>
-                                  </a>
-                                ))
+                      <>
+                        {pendingUserVerifications.length > 0 && pendingUserVerifications.map(user => (
+                          <div key={`user-${user.id}`} className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                            <div className="space-y-1">
+                              <span className="px-2 py-0.5 text-[9px] font-bold uppercase rounded-full tracking-wider inline-block bg-amber-100 text-amber-700">
+                                User verification pending
+                              </span>
+                              <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{user.name}</h4>
+                              <p className="text-[11px] text-slate-500 font-medium">
+                                {user.email || user.location || 'No email or location available'}
+                              </p>
+                              {user.role === 'supplier' && (
+                                <p className="text-[11px] text-indigo-600 font-semibold">
+                                  Supplier status: <span className="text-slate-600 font-medium italic">{user.supplierProfile?.verified || 'Pending'}</span>
+                                </p>
                               )}
                             </div>
+                            <div className="flex gap-2 shrink-0 self-end md:self-center">
+                              <button
+                                onClick={() => onUpdateUserVerification(user.id, true)}
+                                disabled={!canVerifyUsers}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shadow-xs disabled:opacity-50"
+                              >
+                                Verify User
+                              </button>
+                              <button
+                                onClick={() => onUpdateUserVerification(user.id, false)}
+                                disabled={!canVerifyUsers}
+                                className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50"
+                              >
+                                Mark Pending
+                              </button>
+                            </div>
                           </div>
+                        ))}
 
-                          <div className="flex gap-2 shrink-0 self-end md:self-center">
-                            <button 
-                              onClick={() => onApproveSupplier(sup.id)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shadow-xs"
-                            >
-                              Approve Badging
-                            </button>
-                            <button 
-                              onClick={() => onRejectSupplier(sup.id)}
-                              className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
-                            >
-                              Reject Identity
-                            </button>
+                        {pendingSuppliers.length > 0 && pendingSuppliers.map(sup => (
+                          <div key={sup.id} className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                            <div className="space-y-1">
+                              <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded-full tracking-wider inline-block ${getVerifiedBadgeStyle(sup.verified)}`}>
+                                {sup.verified}
+                              </span>
+                              <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{sup.name}</h4>
+                              <p className="text-[11px] text-slate-500 font-medium">Headquarters Location: {sup.location} | Joined date: {sup.joinedDate}</p>
+                              <p className="text-[11px] text-indigo-600 font-semibold">
+                                Dossier: <span className="text-slate-600 font-medium italic">GStin certification ({sup.gstin}), Registered classifications ({sup.primaryCategories})</span>
+                              </p>
+                              <div className="flex flex-wrap gap-2 pt-2">
+                                {(sup.documents || []).length === 0 ? (
+                                  <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded">
+                                    No uploaded documents found
+                                  </span>
+                                ) : (
+                                  sup.documents.map(doc => (
+                                    <a
+                                      key={`${sup.id}-${doc.documentType}`}
+                                      href={doc.dataUrl}
+                                      download={doc.fileName}
+                                      className="inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded px-2 py-1 text-[10px] font-bold"
+                                    >
+                                      <Download className="w-3 h-3 text-indigo-600" />
+                                      <span>{doc.label || doc.documentType}</span>
+                                      <span className={`px-1 rounded ${doc.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : doc.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        {doc.status || 'Pending'}
+                                      </span>
+                                    </a>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 shrink-0 self-end md:self-center">
+                              <button 
+                                onClick={() => onApproveSupplier(sup.id)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shadow-xs"
+                              >
+                                Approve Badging
+                              </button>
+                              <button 
+                                onClick={() => onRejectSupplier(sup.id)}
+                                className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                              >
+                                Reject Identity
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </>
                     )}
                   </div>
                 </div>
@@ -952,7 +991,7 @@ export default function AdminPanel({
                       {alert.title.includes('verification') && (
                         <button 
                           onClick={() => setActiveTab('verify')}
-                          className="bg-slate-100 hover:bg-slate-200 border border-slate-200 font-bold text-[10px] px-2 py-1 select-none flex-shrink-0 cursor-pointer rounded"
+                          className="bg-slate-100 hover:bg-slate-200 border border-slate-200 font-bold text-[10px] px-2 py-1 select-none shrink-0 cursor-pointer rounded"
                         >
                           Review
                         </button>

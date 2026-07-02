@@ -64,7 +64,7 @@ const updateUserStatus = async (req, res, next) => {
         accountStatus: status,
         suspensionReason: status === 'Suspended' ? reason || 'Fraud risk flagged by admin.' : ''
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!user) {

@@ -32,14 +32,18 @@ const createRequirement = async (req, res, next) => {
       title: 'Requirement Matches Generated!',
       description: `New request "${added.title}" matched with ${matchedSuppliers.length} relevant suppliers by category, location, industry, and supplier type.`,
       type: 'success',
-      role: 'customer'
+      role: 'customer',
+      userId: req.user.id
     });
-    await addNotification({
-      title: 'New live requirement matched!',
-      description: `New request matching category uploaded: "${added.title}". Submit proposal bids.`,
-      type: 'info',
-      role: 'supplier'
-    });
+    if (matchedSuppliers.length) {
+      await Promise.all(matchedSuppliers.map(ms => addNotification({
+        title: 'New live requirement matched!',
+        description: `New request matching category uploaded: "${added.title}". Submit proposal bids.`,
+        type: 'info',
+        role: 'supplier',
+        userId: ms.supplier?.userId
+      })));
+    }
     await addNotification({
       title: 'New requirement audit review',
       description: `Customer ${req.user.name} uploaded a requirement RFP of size ${added.quantity}.`,
@@ -101,7 +105,8 @@ const updateRequirement = async (req, res, next) => {
       title: 'Requirement updated',
       description: `"${requirement.title}" is now marked ${requirement.status}.`,
       type: requirement.status === 'Cancelled' ? 'warning' : 'info',
-      role: 'customer'
+      role: 'customer',
+      userId: requirement.customerId
     });
 
     res.json(await buildBootstrap(req.user));

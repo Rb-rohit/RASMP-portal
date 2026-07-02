@@ -30,6 +30,7 @@ export default function SupplierPanel({
 }) {
   const [activeTab, setActiveTab] = useState('dash');
   const [filterCategory, setFilterCategory] = useState('All');
+  const [sortByDate, setSortByDate] = useState('newest');
 
   // Bid submission state modal
   const [selectedLead, setSelectedLead] = useState(null);
@@ -561,7 +562,7 @@ export default function SupplierPanel({
                 className="space-y-4"
               >
                 {/* FILTER CATEGORIES */}
-                <div className="flex gap-2 pb-2 overflow-x-auto border-0">
+                {/* <div className="flex gap-2 pb-2 overflow-x-auto border-0">
                   {['All', 'IT / Technology', 'Industrial & manufacturing', 'Logistics', 'Agriculture', 'Real estate & construction'].map(cat => (
                     <button
                       key={cat}
@@ -576,16 +577,42 @@ export default function SupplierPanel({
                       {cat}
                     </button>
                   ))}
+                </div> */}
+
+                {/* SORT OPTION */}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-700">Sort by date:</p>
+                  <select
+                    value={sortByDate}
+                    onChange={(e) => setSortByDate(e.target.value)}
+                    className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-white cursor-pointer"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                  </select>
                 </div>
 
                 {/* OPPORTUNITES LISTING */}
                 <div className="space-y-3">
-                  {filteredLeads.filter(l => !['Closed', 'Cancelled'].includes(l.status)).length === 0 ? (
+                  {filteredLeads
+                    .filter(l => !['Closed', 'Cancelled'].includes(l.status))
+                    .sort((a, b) => {
+                      const dateA = new Date(a.createdAt || a.requiredBy);
+                      const dateB = new Date(b.createdAt || b.requiredBy);
+                      return sortByDate === 'newest' ? dateB - dateA : dateA - dateB;
+                    }).length === 0 ? (
                     <div className="bg-white p-12 text-center rounded-xl border border-slate-200">
                       <p className="text-slate-500 text-sm">No matched opportunities found.</p>
                     </div>
                   ) : (
-                    filteredLeads.filter(l => !['Closed', 'Cancelled'].includes(l.status)).map((lead, index) => (
+                    filteredLeads
+                      .filter(l => !['Closed', 'Cancelled'].includes(l.status))
+                      .sort((a, b) => {
+                        const dateA = new Date(a.createdAt || a.requiredBy);
+                        const dateB = new Date(b.createdAt || b.requiredBy);
+                        return sortByDate === 'newest' ? dateB - dateA : dateA - dateB;
+                      })
+                      .map((lead, index) => (
                       <div key={getListKey('filtered-lead', lead, index)} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <div className="min-w-0 space-y-1">
                           <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">{lead.category}</span>

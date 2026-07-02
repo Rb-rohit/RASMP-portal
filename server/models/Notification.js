@@ -29,6 +29,10 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       enum: ['customer', 'supplier', 'admin'],
       required: true
+    },
+    userId: {
+      type: String,
+      trim: true
     }
   },
   {

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { 
-  Building2, 
   Lock, 
   Mail, 
   Phone, 
@@ -625,7 +624,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               ✕
             </button>
           </div>
-          <p className="text-xs font-mono font-bold text-white bg-slate-950 p-2.5 rounded border border-indigo-900 leading-relaxed break-words">
+          <p className="text-xs font-mono font-bold text-white bg-slate-950 p-2.5 rounded border border-indigo-900 leading-relaxed wrap-break-words">
             {smsNotificationMsg}
           </p>
         </div>

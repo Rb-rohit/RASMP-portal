@@ -19,11 +19,11 @@ const adminRoutes = require('./routes/AdminRoute');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://127.0.0.1:5173';
+// const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://127.0.0.1:5173';
 const allowedOrigins = new Set([
-  CLIENT_ORIGIN,
+  // CLIENT_ORIGIN,
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  // 'http://127.0.0.1:5173'
 ]);
 
 app.use(express.json({ limit: '25mb' }));

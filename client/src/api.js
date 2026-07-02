@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export const getToken = () => localStorage.getItem('rasmp_token');
@@ -12,35 +14,44 @@ export const clearSession = () => {
   localStorage.removeItem('rasmp_user');
 };
 
-export async function apiRequest(path, options = {}) {
-  const headers = {
+const axiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
     'Content-Type': 'application/json',
-    ...(options.headers || {})
-  };
-
+  }
+});
+axiosInstance.interceptors.request.use(config => {
   const token = getToken();
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export async function apiRequest(path, options = {}) {
+  try {
+    const response = await axiosInstance({
+      url: path,
+      method: options.method,
+      data: options.body, // axios uses 'data' instead of 'body'
+      ...options,
+    });
+    return response.data;
+  } catch (error) {
+  if (error.code === 'ECONNABORTED' || error.response?.status === 502) {
+    throw new Error(
+      'RASMP backend is not reachable. Start the server on port 5000, then refresh the client.',
+      { cause: error }
+    );
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    if (response.status === 502) {
-      throw new Error('RASMP backend is not reachable. Start the server on port 5000, then refresh the client.');
-    }
-
-    throw new Error(data.message || 'RASMP API request failed.');
-  }
-  // console.log("API URL:", API_BASE_URL);
-  // console.log("API Response:", data);
-  return data;
+  throw new Error(
+    error.response?.data?.message ||
+    error.message ||
+    'RASMP API request failed.',
+    { cause: error }
+  );
+}
 }
 
 export const api = {

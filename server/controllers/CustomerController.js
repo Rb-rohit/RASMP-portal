@@ -27,7 +27,7 @@ const updateProfile = async (req, res, next) => {
         email,
         initials: initialsFor(req.body.name)
       },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
 
     res.json({
@@ -55,7 +55,7 @@ const changePassword = async (req, res, next) => {
     const updatedUser = await User.findOneAndUpdate(
       { id: req.user.id },
       { passwordHash: await bcrypt.hash(newPassword, 10) },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     res.json({
